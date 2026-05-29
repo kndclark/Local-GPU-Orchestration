@@ -33,6 +33,7 @@ dev = [
     "black",
     "isort",
     "flake8",
+    "bandit",
 ]
 
 [tool.black]

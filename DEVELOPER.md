@@ -31,3 +31,34 @@ Our script `scripts/compile_protos.py` reads the `.proto` file and generates Pyt
 - **`_pb2_grpc.py`**: The network client/server code.
 
 We generate these files directly into the `control_plane/proto/` and `worker_agent/proto/` directories. This ensures both components have the exact same definitions and can safely communicate. Whenever you change the `orchestrator.proto` file, you must re-run the compilation script to update the Python code.
+
+---
+
+## Development & CI/CD Pipeline
+
+We maintain high code quality through a rigorous CI/CD pipeline configured via GitHub Actions (`.github/workflows/ci.yml`). Every push and pull request runs formatting checks, linting, security analysis, and the full test suite.
+
+### Local Development Setup
+To set up your local environment and install all dependencies:
+```bash
+pip install -e .[dev,test]
+```
+
+### Running Tests
+We use `pytest` for all unit and integration testing. We strongly adhere to Test-Driven Development (TDD).
+```bash
+pytest -v
+```
+
+### Linting & Formatting
+We use `black` for code formatting and `flake8` for style guide enforcement.
+```bash
+black .
+flake8 .
+```
+
+### Security Analysis (SAST)
+We use `bandit` to scan our Python code for common security vulnerabilities. We specifically exclude the generated protobuf files.
+```bash
+bandit -r control_plane worker_agent -x control_plane/proto,worker_agent/proto
+```
