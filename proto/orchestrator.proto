@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package orchestrator;
+
+// Node Registration
+message RegisterNodeRequest {
+  string node_id = 1;
+  string hostname = 2;
+  // Capabilities like total VRAM, GPUs available, etc.
+  int64 total_vram_mb = 3;
+  int32 gpu_count = 4;
+  repeated string supported_workloads = 5; // e.g. "cuda", "ffmpeg"
+}
+
+message RegisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Node Heartbeat
+message HeartbeatRequest {
+  string node_id = 1;
+  // Current stats
+  int64 free_vram_mb = 2;
+  float gpu_temperature_c = 3;
+  float gpu_utilization_percent = 4;
+  // Currently running jobs
+  repeated string active_job_ids = 5;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  // Server might send back a command, e.g. "TERMINATE_JOB"
+}
+
+// Job Dispatching
+message JobRequest {
+  string job_id = 1;
+  string workload_type = 2; // e.g. "ffmpeg", "llama"
+  repeated string args = 3;
+  map<string, string> env_vars = 4;
+}
+
+message JobResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message JobStatusUpdate {
+  string job_id = 1;
+  string node_id = 2;
+  string status = 3; // "RUNNING", "COMPLETED", "FAILED"
+  string error_message = 4;
+}
+
+message JobStatusResponse {
+  bool acknowledged = 1;
+}
+
+// The Orchestrator Service
+service Orchestrator {
+  rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc SendHeartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // A worker can request a job (pull-based)
+  rpc RequestJob (JobRequestPlaceholder) returns (JobRequest);
+
+  rpc UpdateJobStatus (JobStatusUpdate) returns (JobStatusResponse);
+}
+
+message JobRequestPlaceholder {
+  string node_id = 1;
+}
