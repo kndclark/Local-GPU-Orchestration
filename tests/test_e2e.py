@@ -21,6 +21,10 @@ async def test_end_to_end_orchestration():
     await server.start()
 
     try:
+        # Clear the global scheduler queue from any previous test runs
+        while not scheduler.queue.empty():
+            scheduler.queue.get_nowait()
+
         # 2. Worker Agent Registration
         worker = WorkerClient(node_id="test-node", server_address="localhost:50051")
         success = await worker.register_node(
