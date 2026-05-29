@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional
 
+
 class FIFOScheduler:
     def __init__(self, maxsize: int = 0):
         self.queue = asyncio.Queue(maxsize=maxsize)
