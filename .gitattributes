@@ -1,0 +1,8 @@
+# Auto-detect text files
+* text=auto
+
+# Enforce CRLF for PowerShell scripts (Windows PowerShell 5.1 crashes on LF)
+*.ps1 text eol=crlf
+
+# Enforce LF for Bash scripts (Linux crashes on CRLF)
+*.sh text eol=lf
