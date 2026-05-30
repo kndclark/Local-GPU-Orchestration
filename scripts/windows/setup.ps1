@@ -47,12 +47,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Ensure we can run the activate script
-$currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
-if ($currentPolicy -eq "Restricted" -or $currentPolicy -eq "Undefined") {
-    Write-Host "Setting Execution Policy to RemoteSigned for the current user to allow script execution..."
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-}
 
 # 4. Install Dependencies
 Write-Host "`nInstalling dependencies..."
