@@ -2,14 +2,74 @@ syntax = "proto3";
 
 package orchestrator;
 
+// ──────────────────────────────────────────────
+// Telemetry Messages
+// ──────────────────────────────────────────────
+
+message GpuInfo {
+  int32 index = 1;
+  string vendor = 2;              // "NVIDIA", "AMD", "INTEL"
+  string model = 3;               // "RTX 4090", "RX 7600"
+  string driver_version = 4;
+
+  // Memory
+  int64 total_vram_mb = 10;
+  int64 free_vram_mb = 11;
+  int64 used_vram_mb = 12;
+
+  // Thermals & Power
+  float temperature_c = 20;
+  float temperature_hotspot_c = 21;
+  float fan_speed_percent = 22;
+  float power_draw_w = 23;
+  float power_limit_w = 24;
+
+  // Utilization
+  float gpu_utilization_percent = 30;
+  float memory_utilization_percent = 31;
+  float encoder_utilization_percent = 32;
+  float decoder_utilization_percent = 33;
+
+  // Clocks
+  int32 clock_core_mhz = 40;
+  int32 clock_memory_mhz = 41;
+  int32 clock_core_max_mhz = 42;
+  int32 clock_memory_max_mhz = 43;
+
+  // PCIe
+  int32 pcie_gen = 50;
+  int32 pcie_width = 51;
+  float pcie_bandwidth_percent = 52;
+}
+
+message DiskInfo {
+  string mount_point = 1;
+  int64 total_bytes = 2;
+  int64 free_bytes = 3;
+  float read_bytes_per_sec = 4;
+  float write_bytes_per_sec = 5;
+}
+
+message NetworkInfo {
+  string interface_name = 1;
+  float send_bytes_per_sec = 2;
+  float recv_bytes_per_sec = 3;
+}
+
+// ──────────────────────────────────────────────
 // Node Registration
+// ──────────────────────────────────────────────
+
 message RegisterNodeRequest {
   string node_id = 1;
   string hostname = 2;
-  // Capabilities like total VRAM, GPUs available, etc.
-  int64 total_vram_mb = 3;
-  int32 gpu_count = 4;
-  repeated string supported_workloads = 5; // e.g. "cuda", "ffmpeg"
+  string os = 3;
+  string os_version = 4;
+  int32 cpu_count = 5;
+  string cpu_model = 6;
+  int64 total_ram_mb = 7;
+  repeated GpuInfo gpus = 10;
+  repeated string supported_workloads = 15;
 }
 
 message RegisterNodeResponse {
@@ -17,26 +77,32 @@ message RegisterNodeResponse {
   string message = 2;
 }
 
+// ──────────────────────────────────────────────
 // Node Heartbeat
+// ──────────────────────────────────────────────
+
 message HeartbeatRequest {
   string node_id = 1;
-  // Current stats
-  int64 free_vram_mb = 2;
-  float gpu_temperature_c = 3;
-  float gpu_utilization_percent = 4;
-  // Currently running jobs
-  repeated string active_job_ids = 5;
+  repeated GpuInfo gpus = 10;
+  float cpu_utilization_percent = 20;
+  float ram_utilization_percent = 21;
+  int64 ram_available_mb = 22;
+  repeated DiskInfo disks = 30;
+  repeated NetworkInfo network = 31;
+  repeated string active_job_ids = 40;
 }
 
 message HeartbeatResponse {
   bool acknowledged = 1;
-  // Server might send back a command, e.g. "TERMINATE_JOB"
 }
 
+// ──────────────────────────────────────────────
 // Job Dispatching
+// ──────────────────────────────────────────────
+
 message JobRequest {
   string job_id = 1;
-  string workload_type = 2; // e.g. "ffmpeg", "llama"
+  string workload_type = 2;
   repeated string args = 3;
   map<string, string> env_vars = 4;
 }
@@ -49,7 +115,7 @@ message JobResponse {
 message JobStatusUpdate {
   string job_id = 1;
   string node_id = 2;
-  string status = 3; // "RUNNING", "COMPLETED", "FAILED"
+  string status = 3;
   string error_message = 4;
 }
 
@@ -57,17 +123,17 @@ message JobStatusResponse {
   bool acknowledged = 1;
 }
 
+message JobRequestPlaceholder {
+  string node_id = 1;
+}
+
+// ──────────────────────────────────────────────
 // The Orchestrator Service
+// ──────────────────────────────────────────────
+
 service Orchestrator {
   rpc RegisterNode (RegisterNodeRequest) returns (RegisterNodeResponse);
   rpc SendHeartbeat (HeartbeatRequest) returns (HeartbeatResponse);
-  
-  // A worker can request a job (pull-based)
   rpc RequestJob (JobRequestPlaceholder) returns (JobRequest);
-
   rpc UpdateJobStatus (JobStatusUpdate) returns (JobStatusResponse);
-}
-
-message JobRequestPlaceholder {
-  string node_id = 1;
 }

@@ -3,11 +3,11 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["control_plane", "worker_agent"]
+packages = ["control_plane", "worker_agent", "worker_agent.hal"]
 
 [project]
 name = "gpu-orchestrator"
-version = "0.1.0"
+version = "0.2.0"
 description = "A distributed, performance-aware GPU workload orchestrator"
 readme = "IMPLEMENTATION_PLAN.md"
 requires-python = ">=3.10"
@@ -20,9 +20,11 @@ dependencies = [
     "pydantic-settings",
     "sqlalchemy",
     "asyncpg",
+    "psutil",
 ]
 
 [project.optional-dependencies]
+nvidia = ["nvidia-ml-py"]
 test = [
     "pytest",
     "pytest-asyncio",
@@ -48,3 +50,9 @@ multi_line_output = 3
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "hardware: marks tests that require physical GPU hardware (deselect with '-m not hardware')",
+    "nvidia: marks tests specific to NVIDIA GPU hardware",
+    "amd: marks tests specific to AMD GPU hardware",
+]
+

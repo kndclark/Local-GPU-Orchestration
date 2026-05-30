@@ -1,8 +1,45 @@
 import grpc
 import logging
 from worker_agent.proto import orchestrator_pb2, orchestrator_pb2_grpc
+from worker_agent.hal.base import GpuDevice, GpuTelemetry, SystemTelemetry
 
 logger = logging.getLogger(__name__)
+
+
+def _gpu_device_to_proto(gpu: GpuDevice) -> orchestrator_pb2.GpuInfo:
+    """Convert a HAL GpuDevice to a protobuf GpuInfo."""
+    return orchestrator_pb2.GpuInfo(
+        index=gpu.index,
+        vendor=gpu.vendor,
+        model=gpu.model,
+        driver_version=gpu.driver_version,
+        total_vram_mb=gpu.total_vram_mb,
+    )
+
+
+def _gpu_telemetry_to_proto(telem: GpuTelemetry) -> orchestrator_pb2.GpuInfo:
+    """Convert a HAL GpuTelemetry to a protobuf GpuInfo."""
+    return orchestrator_pb2.GpuInfo(
+        index=telem.index,
+        free_vram_mb=telem.free_vram_mb,
+        used_vram_mb=telem.used_vram_mb,
+        temperature_c=telem.temperature_c,
+        temperature_hotspot_c=telem.temperature_hotspot_c,
+        fan_speed_percent=telem.fan_speed_percent,
+        power_draw_w=telem.power_draw_w,
+        power_limit_w=telem.power_limit_w,
+        gpu_utilization_percent=telem.gpu_utilization_percent,
+        memory_utilization_percent=telem.memory_utilization_percent,
+        encoder_utilization_percent=telem.encoder_utilization_percent,
+        decoder_utilization_percent=telem.decoder_utilization_percent,
+        clock_core_mhz=telem.clock_core_mhz,
+        clock_memory_mhz=telem.clock_memory_mhz,
+        clock_core_max_mhz=telem.clock_core_max_mhz,
+        clock_memory_max_mhz=telem.clock_memory_max_mhz,
+        pcie_gen=telem.pcie_gen,
+        pcie_width=telem.pcie_width,
+        pcie_bandwidth_percent=telem.pcie_bandwidth_percent,
+    )
 
 
 class WorkerClient:
@@ -23,9 +60,13 @@ class WorkerClient:
     async def register_node(
         self,
         hostname: str,
-        total_vram_mb: int,
-        gpu_count: int,
+        gpus: list[GpuDevice],
         supported_workloads: list[str],
+        os_name: str = "",
+        os_version: str = "",
+        cpu_count: int = 0,
+        cpu_model: str = "",
+        total_ram_mb: int = 0,
     ) -> bool:
         if not self.stub:
             self.connect()
@@ -33,8 +74,12 @@ class WorkerClient:
         req = orchestrator_pb2.RegisterNodeRequest(
             node_id=self.node_id,
             hostname=hostname,
-            total_vram_mb=total_vram_mb,
-            gpu_count=gpu_count,
+            os=os_name,
+            os_version=os_version,
+            cpu_count=cpu_count,
+            cpu_model=cpu_model,
+            total_ram_mb=total_ram_mb,
+            gpus=[_gpu_device_to_proto(g) for g in gpus],
             supported_workloads=supported_workloads,
         )
 
@@ -47,9 +92,7 @@ class WorkerClient:
 
     async def send_heartbeat(
         self,
-        free_vram_mb: int,
-        temp_c: float,
-        util_percent: float,
+        telemetry: SystemTelemetry,
         active_jobs: list[str],
     ) -> bool:
         if not self.stub:
@@ -57,9 +100,10 @@ class WorkerClient:
 
         req = orchestrator_pb2.HeartbeatRequest(
             node_id=self.node_id,
-            free_vram_mb=free_vram_mb,
-            gpu_temperature_c=temp_c,
-            gpu_utilization_percent=util_percent,
+            gpus=[_gpu_telemetry_to_proto(g) for g in telemetry.gpus],
+            cpu_utilization_percent=telemetry.cpu_utilization_percent,
+            ram_utilization_percent=telemetry.ram_utilization_percent,
+            ram_available_mb=telemetry.ram_available_mb,
             active_job_ids=active_jobs,
         )
 
