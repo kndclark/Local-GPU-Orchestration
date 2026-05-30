@@ -18,6 +18,8 @@ class WorkerSettings(BaseSettings):
     @field_validator("orchestrator_url")
     @classmethod
     def ensure_port(cls, v: str) -> str:
+        if v.lower() == "auto":
+            return "auto"
         if ":" not in v:
             return f"{v}:50051"
         return v
