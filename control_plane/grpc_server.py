@@ -1,6 +1,6 @@
 import json
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
-from control_plane.database.models import Node, Job
+from control_plane.database.models import Node, Gpu, Job
 from control_plane.scheduler import FIFOScheduler
 
 
@@ -17,9 +17,50 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                 db.add(node)
 
             node.hostname = request.hostname
-            node.total_vram_mb = request.total_vram_mb
-            node.gpu_count = request.gpu_count
+            node.os = request.os
+            node.os_version = request.os_version
+            node.cpu_count = request.cpu_count
+            node.cpu_model = request.cpu_model
+            node.total_ram_mb = request.total_ram_mb
             node.supported_workloads = ",".join(request.supported_workloads)
+
+            # Upsert GPU records
+            # Delete existing GPUs for this node, then re-create
+            existing_gpus = (
+                db.query(Gpu).filter(Gpu.node_id == request.node_id).all()
+            )
+            for g in existing_gpus:
+                db.delete(g)
+
+            for gpu_info in request.gpus:
+                gpu = Gpu(
+                    node_id=request.node_id,
+                    gpu_index=gpu_info.index,
+                    vendor=gpu_info.vendor,
+                    model_name=gpu_info.model,
+                    driver_version=gpu_info.driver_version,
+                    total_vram_mb=gpu_info.total_vram_mb,
+                    free_vram_mb=gpu_info.free_vram_mb,
+                    used_vram_mb=gpu_info.used_vram_mb,
+                    temperature_c=gpu_info.temperature_c,
+                    temperature_hotspot_c=gpu_info.temperature_hotspot_c,
+                    fan_speed_percent=gpu_info.fan_speed_percent,
+                    power_draw_w=gpu_info.power_draw_w,
+                    power_limit_w=gpu_info.power_limit_w,
+                    gpu_utilization_percent=gpu_info.gpu_utilization_percent,
+                    memory_utilization_percent=gpu_info.memory_utilization_percent,
+                    encoder_utilization_percent=gpu_info.encoder_utilization_percent,
+                    decoder_utilization_percent=gpu_info.decoder_utilization_percent,
+                    clock_core_mhz=gpu_info.clock_core_mhz,
+                    clock_memory_mhz=gpu_info.clock_memory_mhz,
+                    clock_core_max_mhz=gpu_info.clock_core_max_mhz,
+                    clock_memory_max_mhz=gpu_info.clock_memory_max_mhz,
+                    pcie_gen=gpu_info.pcie_gen,
+                    pcie_width=gpu_info.pcie_width,
+                    pcie_bandwidth_percent=gpu_info.pcie_bandwidth_percent,
+                )
+                db.add(gpu)
+
             db.commit()
 
         return orchestrator_pb2.RegisterNodeResponse(
@@ -30,9 +71,46 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:
-                node.free_vram_mb = request.free_vram_mb
-                node.gpu_temperature_c = request.gpu_temperature_c
-                node.gpu_utilization_percent = request.gpu_utilization_percent
+                node.cpu_utilization_percent = request.cpu_utilization_percent
+                node.ram_utilization_percent = request.ram_utilization_percent
+                node.ram_available_mb = request.ram_available_mb
+
+                # Update per-GPU telemetry
+                for gpu_info in request.gpus:
+                    gpu = (
+                        db.query(Gpu)
+                        .filter(
+                            Gpu.node_id == request.node_id,
+                            Gpu.gpu_index == gpu_info.index,
+                        )
+                        .first()
+                    )
+                    if gpu:
+                        gpu.free_vram_mb = gpu_info.free_vram_mb
+                        gpu.used_vram_mb = gpu_info.used_vram_mb
+                        gpu.temperature_c = gpu_info.temperature_c
+                        gpu.temperature_hotspot_c = gpu_info.temperature_hotspot_c
+                        gpu.fan_speed_percent = gpu_info.fan_speed_percent
+                        gpu.power_draw_w = gpu_info.power_draw_w
+                        gpu.power_limit_w = gpu_info.power_limit_w
+                        gpu.gpu_utilization_percent = gpu_info.gpu_utilization_percent
+                        gpu.memory_utilization_percent = (
+                            gpu_info.memory_utilization_percent
+                        )
+                        gpu.encoder_utilization_percent = (
+                            gpu_info.encoder_utilization_percent
+                        )
+                        gpu.decoder_utilization_percent = (
+                            gpu_info.decoder_utilization_percent
+                        )
+                        gpu.clock_core_mhz = gpu_info.clock_core_mhz
+                        gpu.clock_memory_mhz = gpu_info.clock_memory_mhz
+                        gpu.clock_core_max_mhz = gpu_info.clock_core_max_mhz
+                        gpu.clock_memory_max_mhz = gpu_info.clock_memory_max_mhz
+                        gpu.pcie_gen = gpu_info.pcie_gen
+                        gpu.pcie_width = gpu_info.pcie_width
+                        gpu.pcie_bandwidth_percent = gpu_info.pcie_bandwidth_percent
+
                 db.commit()
         return orchestrator_pb2.HeartbeatResponse(acknowledged=True)
 

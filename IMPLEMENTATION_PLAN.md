@@ -66,7 +66,7 @@ This document outlines the architecture and phased implementation plan for a dis
 
 ### Phase 2: Distributed Workers & Hardware Abstraction
 *   Define the Protobuf schemas for gRPC communication (Registration, Heartbeat, Job Dispatch).
-*   Deploy agents to the Desktop (Windows), Steam Deck (Linux), and ROG Ally (Windows).
+*   Deploy agents to the Desktop (Windows), Steam Deck (Linux/SteamOS), and ROG Ally X (Linux/SteamOS).
 *   Build the Hardware Abstraction Layer (HAL) in the workers to normalize telemetry across NVML, AMD APIs, and Windows WMI.
 
 ### Phase 3: Telemetry Pipeline & Dashboards
