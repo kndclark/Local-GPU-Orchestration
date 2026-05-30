@@ -54,7 +54,8 @@ $pipPath = ".venv\Scripts\pip.exe"
 & $pipPath install --upgrade pip
 
 if ($hasNvidia) {
-    Write-Host "Installing base dependencies + NVIDIA (pynvml) support..."
+    Write-Host "Installing base dependencies + NVIDIA support..."
+    & $pipPath uninstall -y pynvml
     & $pipPath install -e .[nvidia]
 } else {
     Write-Host "Installing base dependencies..."

@@ -48,7 +48,8 @@ echo "Installing dependencies..."
 pip install --upgrade pip
 
 if [ "$HAS_NVIDIA" = true ]; then
-    echo "Installing base dependencies + NVIDIA (pynvml) support..."
+    echo "Installing base dependencies + NVIDIA support..."
+    pip uninstall -y pynvml
     pip install -e .[nvidia]
 else
     echo "Installing base dependencies (AMD sysfs support is built-in)..."
