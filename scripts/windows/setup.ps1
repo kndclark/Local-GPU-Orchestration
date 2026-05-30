@@ -11,9 +11,9 @@ Write-Host ""
 # 1. Check for Python 3
 try {
     $pythonVersion = & python --version 2>&1
-    Write-Host "✓ Python found: $pythonVersion" -ForegroundColor Green
+    Write-Host "[OK] Python found: $pythonVersion" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Python is not installed or not in your PATH. Please install Python 3 and try again." -ForegroundColor Red
+    Write-Host "[X] Python is not installed or not in your PATH. Please install Python 3 and try again." -ForegroundColor Red
     exit 1
 }
 
@@ -27,23 +27,23 @@ foreach ($vc in $videoControllers) {
     $name = $vc.Name
     if ($name -match "NVIDIA") {
         $hasNvidia = $true
-        Write-Host "✓ NVIDIA GPU detected: $name" -ForegroundColor Green
+        Write-Host "[OK] NVIDIA GPU detected: $name" -ForegroundColor Green
     }
     if ($name -match "AMD" -or $name -match "Radeon") {
         $hasAmd = $true
-        Write-Host "✓ AMD GPU detected: $name" -ForegroundColor Green
+        Write-Host "[OK] AMD GPU detected: $name" -ForegroundColor Green
     }
 }
 
 if (-not $hasNvidia -and -not $hasAmd) {
-    Write-Host "ℹ No discrete GPU detected. Will install base dependencies." -ForegroundColor Yellow
+    Write-Host "[INFO] No discrete GPU detected. Will install base dependencies." -ForegroundColor Yellow
 }
 
 # 3. Create Virtual Environment
 Write-Host "`nCreating virtual environment (.venv)..."
 & python -m venv .venv
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to create virtual environment." -ForegroundColor Red
+    Write-Host "[X] Failed to create virtual environment." -ForegroundColor Red
     exit 1
 }
 
@@ -83,10 +83,10 @@ if ([string]::IsNullOrWhiteSpace($orchUrl)) {
 }
 
 "ORCHESTRATOR_URL=`"$orchUrl`"" | Out-File -FilePath ".env" -Encoding utf8
-Write-Host "✓ Configuration saved to .env" -ForegroundColor Green
+Write-Host "[OK] Configuration saved to .env" -ForegroundColor Green
 
 Write-Host "`n==================================================" -ForegroundColor Cyan
-Write-Host " Setup Complete! ✨" -ForegroundColor Cyan
+Write-Host " Setup Complete! [SUCCESS]" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "To start the worker agent, run:"
 Write-Host "  .\scripts\windows\start_worker.ps1" -ForegroundColor Yellow

@@ -18,7 +18,7 @@ try {
         throw "Setup script exited with code $LASTEXITCODE"
     }
 } catch {
-    Write-Host "❌ Setup failed: $($_.Exception.Message). Aborting." -ForegroundColor Red
+    Write-Host "[X] Setup failed: $($_.Exception.Message). Aborting." -ForegroundColor Red
     exit 1
 }
 
@@ -30,6 +30,6 @@ try {
         throw "Worker script exited with code $LASTEXITCODE"
     }
 } catch {
-    Write-Host "❌ Worker daemon crashed or failed to start: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[X] Worker daemon crashed or failed to start: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
