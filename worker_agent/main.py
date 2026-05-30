@@ -24,6 +24,7 @@ class AgentDaemon:
         self.executor = JobExecutor()
         self._running = False
         self._tasks: list[asyncio.Task] = []
+        self.active_jobs: list[str] = []
 
     async def start(self):
         """Start the daemon and block until stopped."""
@@ -82,10 +83,10 @@ class AgentDaemon:
         while self._running:
             try:
                 telem = self.hw_manager.get_system_telemetry()
-                active_jobs = [j["job_id"] for j in self.executor.active_jobs]
                 await self.client.send_heartbeat(
-                    telemetry=telem, active_jobs=active_jobs
+                    telemetry=telem, active_jobs=self.active_jobs
                 )
+                logger.info(f"Sent heartbeat: {len(telem.gpus)} GPUs, {telem.cpu_utilization_percent:.1f}% CPU, {len(self.active_jobs)} jobs")
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
             
@@ -108,12 +109,16 @@ class AgentDaemon:
                         # e.g., 'ffmpeg'
                         executable = job["workload_type"]
 
-                    success, error_msg = await self.executor.execute_job(
-                        job_id=job["job_id"],
-                        executable=executable,
-                        args=job["args"],
-                        env_vars=job["env_vars"],
-                    )
+                    self.active_jobs.append(job["job_id"])
+                    try:
+                        success, error_msg = await self.executor.execute_job(
+                            job_id=job["job_id"],
+                            executable=executable,
+                            args=job["args"],
+                            env_vars=job["env_vars"],
+                        )
+                    finally:
+                        self.active_jobs.remove(job["job_id"])
 
                     status = "COMPLETED" if success else "FAILED"
                     await self.client.update_job_status(
