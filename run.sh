@@ -1,0 +1,31 @@
+#!/bin/bash
+# run.sh
+# One-click quick install and run script for the GPU Orchestrator Worker (Linux)
+
+set -e
+
+# Change to the directory containing this script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$DIR"
+
+echo "=================================================="
+echo " Starting One-Click Install & Run (Linux)"
+echo "=================================================="
+
+# Make the inner scripts executable just in case
+chmod +x scripts/linux/setup.sh
+chmod +x scripts/linux/start_worker.sh
+
+# 1. Run Setup
+echo ">> Running setup..."
+if ! ./scripts/linux/setup.sh; then
+    echo "❌ Setup failed. Aborting."
+    exit 1
+fi
+
+# 2. Run Worker
+echo ">> Setup successful. Starting worker daemon..."
+if ! ./scripts/linux/start_worker.sh; then
+    echo "❌ Worker daemon crashed or failed to start."
+    exit 1
+fi
