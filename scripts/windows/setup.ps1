@@ -67,6 +67,10 @@ if ($hasNvidia) {
     & $pipPath install -e .
 }
 
+Write-Host "`nCompiling protobufs..."
+$pythonPath = ".venv\Scripts\python.exe"
+& $pythonPath scripts/compile_protos.py
+
 # 5. Configure Environment Variables
 Write-Host "`n==================================================" -ForegroundColor Cyan
 Write-Host " Configuration" -ForegroundColor Cyan

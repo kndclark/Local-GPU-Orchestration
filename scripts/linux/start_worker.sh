@@ -14,5 +14,9 @@ if [ -z "$ORCHESTRATOR_URL" ]; then
     echo "Warning: ORCHESTRATOR_URL not set, defaulting to localhost:50051"
 fi
 
-# Run the agent module
-python3 -m worker_agent.main
+# Run the agent module using the venv if it exists
+if [ -f ".venv/bin/python3" ]; then
+    .venv/bin/python3 -m worker_agent.main
+else
+    python3 -m worker_agent.main
+fi

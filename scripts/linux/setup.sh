@@ -55,6 +55,10 @@ else
     pip install -e .
 fi
 
+echo ""
+echo "Compiling protobufs..."
+python3 scripts/compile_protos.py
+
 # 5. Configure Environment Variables
 echo ""
 echo "=================================================="

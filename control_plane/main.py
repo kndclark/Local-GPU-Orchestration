@@ -9,6 +9,10 @@ from sqlalchemy.pool import StaticPool
 
 from control_plane.database.models import Base, Job, Node, Gpu
 from control_plane.scheduler import FIFOScheduler
+from contextlib import asynccontextmanager
+import grpc.aio
+from control_plane.proto import orchestrator_pb2_grpc
+from control_plane.grpc_server import OrchestratorService
 
 # For phase 1/2, we use in-memory sqlite to avoid requiring
 # running Postgres just for tests.
@@ -21,7 +25,21 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = FIFOScheduler(maxsize=100)
-app = FastAPI(title="GPU Orchestrator Control Plane")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start gRPC server
+    server = grpc.aio.server()
+    orchestrator_pb2_grpc.add_OrchestratorServicer_to_server(
+        OrchestratorService(lambda: SessionLocal(), scheduler), server
+    )
+    server.add_insecure_port("[::]:50051")
+    await server.start()
+    print("gRPC Control Plane listening on [::]:50051")
+    yield
+    await server.stop(0)
+
+app = FastAPI(title="GPU Orchestrator Control Plane", lifespan=lifespan)
 
 
 def get_db():
@@ -197,3 +215,7 @@ async def get_node(node_id: str, db: Session = Depends(get_db)):
         supported_workloads=node.supported_workloads,
         gpus=[_gpu_to_response(g) for g in node.gpus],
     )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("control_plane.main:app", host="0.0.0.0", port=8000, reload=True)
