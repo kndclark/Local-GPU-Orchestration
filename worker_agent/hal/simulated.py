@@ -46,7 +46,7 @@ _BASE = {
 
 def _noisy(base: float, amplitude: float = 5.0) -> float:
     """Add uniform random noise to a base value."""
-    return base + random.uniform(-amplitude, amplitude)
+    return base + random.uniform(-amplitude, amplitude)  # nosec B311
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -86,7 +86,7 @@ class SimulatedBackend(GpuBackend):
 
         if self._config.noise:
             temp = _clamp(_noisy(_BASE["temperature_c"], 8.0), 25.0, 90.0)
-            hotspot = _clamp(temp + random.uniform(3.0, 10.0), 28.0, 95.0)
+            hotspot = _clamp(temp + random.uniform(3.0, 10.0), 28.0, 95.0)  # nosec B311
             util = _clamp(_noisy(_BASE["gpu_utilization_percent"], 15.0), 0.0, 100.0)
             mem_util = _clamp(
                 _noisy(_BASE["memory_utilization_percent"], 10.0), 0.0, 100.0
@@ -99,7 +99,9 @@ class SimulatedBackend(GpuBackend):
             mem_clk = max(800, int(_noisy(_BASE["clock_memory_mhz"], 50)))
             pcie_bw = _clamp(_noisy(_BASE["pcie_bandwidth_percent"], 5.0), 0.0, 100.0)
             vram_frac = _clamp(
-                _BASE["vram_used_fraction"] + random.uniform(-0.1, 0.1), 0.05, 0.95
+                _BASE["vram_used_fraction"] + random.uniform(-0.1, 0.1),
+                0.05,
+                0.95,  # nosec B311
             )
         else:
             temp = _BASE["temperature_c"]

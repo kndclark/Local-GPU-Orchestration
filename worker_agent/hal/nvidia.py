@@ -219,6 +219,6 @@ class NvidiaBackend(GpuBackend):
         if self._initialized and self._pynvml is not None:
             try:
                 self._pynvml.nvmlShutdown()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             self._initialized = False

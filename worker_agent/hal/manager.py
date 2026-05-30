@@ -45,14 +45,14 @@ class HardwareManager:
             from worker_agent.hal.nvidia import NvidiaBackend
 
             backends.append(NvidiaBackend())
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         try:
             from worker_agent.hal.amd_sysfs import AmdSysfsBackend
 
             backends.append(AmdSysfsBackend())
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Simulated is always the last fallback
