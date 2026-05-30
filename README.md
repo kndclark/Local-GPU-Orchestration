@@ -35,7 +35,7 @@ Open PowerShell and run:
 ```powershell
 git clone https://github.com/kndclark/Local-GPU-Orchestration.git
 cd Local-GPU-Orchestration
-.\run.ps1
+powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
 ---

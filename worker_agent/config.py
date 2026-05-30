@@ -20,5 +20,5 @@ class WorkerSettings(BaseSettings):
         return v
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=".env", env_file_encoding="utf-8-sig", extra="ignore"
     )

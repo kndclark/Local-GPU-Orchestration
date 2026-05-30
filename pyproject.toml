@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-nvidia = ["pynvml"]
+nvidia = ["nvidia-ml-py"]
 test = [
     "pytest",
     "pytest-asyncio",
