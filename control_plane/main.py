@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-from prometheus_client import make_asgi_app
+from prometheus_client import CollectorRegistry, make_asgi_app
 
 from control_plane.database.models import Base, Job, Node, Gpu
 from control_plane.scheduler import FIFOScheduler
@@ -29,7 +29,8 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = FIFOScheduler(maxsize=100)
-cp_metrics = ControlPlaneMetrics()
+_cp_registry = CollectorRegistry()
+cp_metrics = ControlPlaneMetrics(registry=_cp_registry)
 
 
 @asynccontextmanager
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="GPU Orchestrator Control Plane", lifespan=lifespan)
 
 # Mount Prometheus /metrics endpoint
-metrics_app = make_asgi_app()
+metrics_app = make_asgi_app(registry=_cp_registry)
 app.mount("/metrics", metrics_app)
 
 
