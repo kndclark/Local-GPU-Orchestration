@@ -69,11 +69,11 @@ echo "=================================================="
 echo " Configuration"
 echo "=================================================="
 echo "The worker needs the address of the Control Plane (e.g., 192.168.1.100:50051)."
-echo "Press Enter to accept the default [localhost:50051]."
+echo "Press Enter to use Auto-Discovery."
 read -p "Orchestrator URL: " ORCH_URL
 
 if [ -z "$ORCH_URL" ]; then
-    ORCH_URL="localhost:50051"
+    ORCH_URL="auto"
 fi
 
 echo "ORCHESTRATOR_URL=\"$ORCH_URL\"" > .env

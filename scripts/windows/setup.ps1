@@ -78,10 +78,10 @@ Write-Host "`n==================================================" -ForegroundCol
 Write-Host " Configuration" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "The worker needs the address of the Control Plane (e.g., 192.168.1.100:50051)."
-$orchUrl = Read-Host "Orchestrator URL [Press Enter to accept default: localhost:50051]"
+$orchUrl = Read-Host "Orchestrator URL [Press Enter to use Auto-Discovery]"
 
 if ([string]::IsNullOrWhiteSpace($orchUrl)) {
-    $orchUrl = "localhost:50051"
+    $orchUrl = "auto"
 }
 
 "ORCHESTRATOR_URL=`"$orchUrl`"" | Out-File -FilePath ".env" -Encoding utf8
