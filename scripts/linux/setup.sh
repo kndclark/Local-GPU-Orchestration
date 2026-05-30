@@ -32,10 +32,16 @@ if lspci | grep -i -E "vga|3d|display" | grep -i amd &> /dev/null; then
     echo "✓ AMD GPU detected."
 fi
 
-if [ "$1" == "--force-nvidia" ]; then
-    HAS_NVIDIA=true
-    echo "ℹ Forcing NVIDIA dependency installation via flag."
-elif [ "$HAS_NVIDIA" = false ] && [ "$HAS_AMD" = false ]; then
+ORCH_URL="auto"
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --force-nvidia) HAS_NVIDIA=true; echo "ℹ Forcing NVIDIA dependency installation via flag."; shift ;;
+        --url) ORCH_URL="$2"; shift; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+done
+
+if [ "$HAS_NVIDIA" = false ] && [ "$HAS_AMD" = false ]; then
     echo "ℹ No discrete GPU detected, or detection failed. Will install base dependencies."
 fi
 
@@ -68,13 +74,7 @@ echo ""
 echo "=================================================="
 echo " Configuration"
 echo "=================================================="
-echo "The worker needs the address of the Control Plane (e.g., 192.168.1.100:50051)."
-echo "Press Enter to use Auto-Discovery."
-read -p "Orchestrator URL: " ORCH_URL
-
-if [ -z "$ORCH_URL" ]; then
-    ORCH_URL="auto"
-fi
+echo "The worker will use Orchestrator URL: $ORCH_URL"
 
 echo "ORCHESTRATOR_URL=\"$ORCH_URL\"" > .env
 echo "✓ Configuration saved to .env"
