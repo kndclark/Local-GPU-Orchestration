@@ -7,8 +7,8 @@ from pydantic import field_validator
 class WorkerSettings(BaseSettings):
     """Configuration for the Worker Agent daemon."""
 
-    orchestrator_url: str = "localhost:50051"
-    node_id: str = f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
+    orchestrator_url: str = "auto"
+    node_id: str = f"{socket.gethostname()}-{hex(uuid.getnode())[2:10]}"
     heartbeat_interval_seconds: float = 5.0
     job_poll_interval_seconds: float = 2.0
     supported_workloads: list[str] = ["python", "ffmpeg"]

@@ -17,12 +17,10 @@ import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
 from control_plane.grpc_server import OrchestratorService
 
-# For phase 1/2, we use in-memory sqlite to avoid requiring
-# running Postgres just for tests.
+# Use a persistent SQLite database so registered nodes survive restarts
 engine = create_engine(
-    "sqlite:///:memory:",
+    "sqlite:///orchestrator.db",
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
 )
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -41,6 +39,13 @@ async def lifespan(app: FastAPI):
     )
     server.add_insecure_port("[::]:50051")
     await server.start()
+    from control_plane.discovery import DiscoveryServerProtocol
+    loop = asyncio.get_running_loop()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: DiscoveryServerProtocol(grpc_port=50051),
+        local_addr=('0.0.0.0', 50052)
+    )
+
     print("gRPC Control Plane listening on [::]:50051")
 
     # Start metrics refresh background task
@@ -58,6 +63,7 @@ async def lifespan(app: FastAPI):
     yield
 
     metrics_task.cancel()
+    transport.close()
     await server.stop(0)
 
 

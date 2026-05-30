@@ -100,6 +100,12 @@ class ControlPlaneMetrics:
         nodes = db.query(Node).all()
         self.nodes_total.set(len(nodes))
 
+        # Clear per-node labels so stale/disconnected nodes disappear from dashboards
+        self.node_cpu_util.clear()
+        self.node_ram_util.clear()
+        self.node_gpu_count.clear()
+        self.node_heartbeat_age.clear()
+
         for node in nodes:
             labels = {"node_id": node.node_id, "hostname": node.hostname}
             self.node_cpu_util.labels(**labels).set(

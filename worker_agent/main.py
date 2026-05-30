@@ -49,6 +49,16 @@ class AgentDaemon:
             )
 
         # 3. Connect to control plane
+        if self.settings.orchestrator_url == "auto":
+            from worker_agent.discovery import discover_orchestrator
+            url = discover_orchestrator()
+            if url:
+                self.settings.orchestrator_url = url
+                self.client.server_address = url
+            else:
+                logger.error("Failed to auto-discover orchestrator. Set ORCHESTRATOR_URL in .env")
+                return
+                
         self.client.connect()
 
         # 4. Register node

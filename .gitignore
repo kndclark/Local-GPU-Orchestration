@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 *pb2.py
 *pb2_grpc.py
+.env
+monitoring/targets.json
