@@ -12,6 +12,8 @@ class WorkerSettings(BaseSettings):
     heartbeat_interval_seconds: float = 5.0
     job_poll_interval_seconds: float = 2.0
     supported_workloads: list[str] = ["python", "ffmpeg"]
+    metrics_port: int = 9101
+    metrics_enabled: bool = True
 
     @field_validator("orchestrator_url")
     @classmethod

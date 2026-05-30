@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+import asyncio
 import uuid
 import json
 
@@ -7,8 +8,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
+from prometheus_client import make_asgi_app
+
 from control_plane.database.models import Base, Job, Node, Gpu
 from control_plane.scheduler import FIFOScheduler
+from control_plane.metrics import ControlPlaneMetrics
 from contextlib import asynccontextmanager
 import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
@@ -25,6 +29,7 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = FIFOScheduler(maxsize=100)
+cp_metrics = ControlPlaneMetrics()
 
 
 @asynccontextmanager
@@ -37,11 +42,30 @@ async def lifespan(app: FastAPI):
     server.add_insecure_port("[::]:50051")
     await server.start()
     print("gRPC Control Plane listening on [::]:50051")
+
+    # Start metrics refresh background task
+    async def _metrics_refresh_loop():
+        while True:
+            try:
+                with SessionLocal() as db:
+                    cp_metrics.refresh(db)
+            except Exception:  # nosec B110
+                pass
+            await asyncio.sleep(15)
+
+    metrics_task = asyncio.create_task(_metrics_refresh_loop())
+
     yield
+
+    metrics_task.cancel()
     await server.stop(0)
 
 
 app = FastAPI(title="GPU Orchestrator Control Plane", lifespan=lifespan)
+
+# Mount Prometheus /metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 def get_db():

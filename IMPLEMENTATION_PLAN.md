@@ -87,3 +87,12 @@ This document outlines the architecture and phased implementation plan for a dis
 ### Phase 7: Architectural Evolution (Optional / Later)
 *   Migrate internal Control Plane communication to **NATS**.
 *   Migrate the Dashboard to **GraphQL Subscriptions / WebSockets**.
+
+### Phase 8: Go Worker Agent (Optional / Later)
+*   Rewrite Worker Agent in **Go** for lower memory footprint and easier deployment.
+*   (Super optional) Rewrite telemetry collection in **Go** for better network performance.
+
+### Phase 9: Config enhancement (Optional / Later)
+*   Make setting up configurations easier using **TOML/YAML**.
+*   Store IP in .env (?)
+*   Investigate one-time install script that can set up the entire orchestrator (including network routing of agent machines) on a new machine, from the host.

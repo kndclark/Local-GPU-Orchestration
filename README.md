@@ -79,6 +79,45 @@ Once setup is complete, run the start script to launch the daemon:
 
 The agent will automatically register with the control plane and begin sending hardware telemetry and polling for jobs.
 
+## Monitoring (Prometheus + Grafana)
+
+The orchestrator exposes Prometheus metrics from both the **Control Plane** (port 8000) and **Worker Agents** (port 9101). A pre-configured Docker Compose stack is provided for visualization.
+
+### Start the Monitoring Stack
+
+```bash
+docker-compose -f docker-compose.monitoring.yml up -d
+```
+
+This starts:
+- **Prometheus** at [http://localhost:9090](http://localhost:9090) — scrapes the control plane and worker agents every 15s
+- **Grafana** at [http://localhost:3000](http://localhost:3000) — pre-provisioned with two dashboards (login: `admin`/`admin`)
+
+### Dashboards
+
+| Dashboard | Description |
+|-----------|-------------|
+| **Cluster Overview** | Node count, total GPUs, VRAM, GPU vendor breakdown, jobs by status, per-node CPU/RAM, GPU temperature, VRAM, power, utilization |
+| **Node Detail** | Drill-down by `node_id` — system stats, per-GPU temperature, utilization, VRAM, power, fan speed, clock speeds |
+
+### Adding Worker Targets
+
+Edit `monitoring/prometheus.yml` to add additional worker agent targets:
+
+```yaml
+- targets: ["<worker-ip>:9101"]
+  labels:
+    component: "worker_agent"
+    machine: "<machine-name>"
+```
+
+### Metrics Ports
+
+| Service | Port | Path |
+|---------|------|------|
+| Control Plane | 8000 | `/metrics/` |
+| Worker Agent | 9101 (configurable) | `/metrics` |
+
 ## Development
 
 ```bash
@@ -95,9 +134,12 @@ python scripts/compile_protos.py
 ### Running Tests
 
 ```bash
-# Run all CI tests (uses simulated backend)
-pytest -m "not hardware"
+# Run all tests (uses simulated backend for GPU tests)
+pytest -v
+
+# Run only CI-safe tests (no physical hardware required)
+pytest -m "not hardware" -v
 
 # Run tests against local physical hardware
-pytest -m "hardware"
+pytest -m "hardware" -v
 ```

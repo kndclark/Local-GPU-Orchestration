@@ -7,7 +7,7 @@ packages = ["control_plane", "worker_agent", "worker_agent.hal"]
 
 [project]
 name = "gpu-orchestrator"
-version = "0.2.0"
+version = "0.3.0"
 description = "A distributed, performance-aware GPU workload orchestrator"
 readme = "IMPLEMENTATION_PLAN.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ dependencies = [
     "sqlalchemy",
     "asyncpg",
     "psutil",
+    "prometheus_client",
 ]
 
 [project.optional-dependencies]
