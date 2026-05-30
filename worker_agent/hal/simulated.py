@@ -99,9 +99,9 @@ class SimulatedBackend(GpuBackend):
             mem_clk = max(800, int(_noisy(_BASE["clock_memory_mhz"], 50)))
             pcie_bw = _clamp(_noisy(_BASE["pcie_bandwidth_percent"], 5.0), 0.0, 100.0)
             vram_frac = _clamp(
-                _BASE["vram_used_fraction"] + random.uniform(-0.1, 0.1),
+                _BASE["vram_used_fraction"] + random.uniform(-0.1, 0.1),  # nosec B311
                 0.05,
-                0.95,  # nosec B311
+                0.95,
             )
         else:
             temp = _BASE["temperature_c"]

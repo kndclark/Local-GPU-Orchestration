@@ -119,13 +119,13 @@ class HardwareManager:
         if psutil is not None:
             try:
                 cpu_util = psutil.cpu_percent(interval=None)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             try:
                 vm = psutil.virtual_memory()
                 ram_util = vm.percent
                 ram_available_mb = int(vm.available / (1024 * 1024))
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # ── Disk ──────────────────────────────
@@ -144,7 +144,7 @@ class HardwareManager:
                         )
                     except (PermissionError, OSError):
                         pass
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # ── Network ───────────────────────────
@@ -160,7 +160,7 @@ class HardwareManager:
                         recv_bytes_per_sec=float(net_io.bytes_recv),
                     )
                 )
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         return SystemTelemetry(
@@ -177,5 +177,5 @@ class HardwareManager:
         if self.active_backend:
             try:
                 self.active_backend.shutdown()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
