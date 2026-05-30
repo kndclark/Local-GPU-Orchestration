@@ -6,7 +6,6 @@ from worker_agent.hal.base import (
 )
 from worker_agent.hal.simulated import SimulatedBackend, SimulatedConfig
 
-
 # ──────────────────────────────────────────────
 # SimulatedConfig tests
 # ──────────────────────────────────────────────

@@ -49,9 +49,10 @@ def _find_hwmon(device_path, reader):
     # Try hwmon0 through hwmon9
     for i in range(10):
         candidate = f"{device_path}/hwmon/hwmon{i}"
-        if reader.exists(f"{candidate}/temp1_input") or reader.read_file(
-            f"{candidate}/temp1_input"
-        ) is not None:
+        if (
+            reader.exists(f"{candidate}/temp1_input")
+            or reader.read_file(f"{candidate}/temp1_input") is not None
+        ):
             return candidate
     return None
 

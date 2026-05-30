@@ -26,9 +26,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
             # Upsert GPU records
             # Delete existing GPUs for this node, then re-create
-            existing_gpus = (
-                db.query(Gpu).filter(Gpu.node_id == request.node_id).all()
-            )
+            existing_gpus = db.query(Gpu).filter(Gpu.node_id == request.node_id).all()
             for g in existing_gpus:
                 db.delete(g)
 

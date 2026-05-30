@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 from worker_agent.client import WorkerClient
 from worker_agent.hal.base import GpuDevice, GpuTelemetry, SystemTelemetry
 
-
 # ──────────────────────────────────────────────
 # Registration tests
 # ──────────────────────────────────────────────

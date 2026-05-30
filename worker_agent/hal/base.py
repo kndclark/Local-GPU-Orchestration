@@ -7,7 +7,6 @@ All telemetry numeric fields default to -1 / -1.0 to indicate
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-
 # ──────────────────────────────────────────────
 # Telemetry Dataclasses
 # ──────────────────────────────────────────────

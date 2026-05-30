@@ -5,7 +5,6 @@ from worker_agent.hal.base import (
 )
 from worker_agent.hal.amd_sysfs import AmdSysfsBackend
 
-
 # ──────────────────────────────────────────────
 # Helpers: mock sysfs tree
 # ──────────────────────────────────────────────

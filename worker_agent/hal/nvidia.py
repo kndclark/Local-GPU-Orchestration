@@ -149,9 +149,7 @@ class NvidiaBackend(GpuBackend):
         clock_core_max = SENSOR_NOT_AVAILABLE_INT
         clock_mem_max = SENSOR_NOT_AVAILABLE_INT
         try:
-            clock_core = nvml.nvmlDeviceGetClockInfo(
-                handle, nvml.NVML_CLOCK_GRAPHICS
-            )
+            clock_core = nvml.nvmlDeviceGetClockInfo(handle, nvml.NVML_CLOCK_GRAPHICS)
         except nvml.NVMLError:
             pass
         try:
@@ -165,9 +163,7 @@ class NvidiaBackend(GpuBackend):
         except nvml.NVMLError:
             pass
         try:
-            clock_mem_max = nvml.nvmlDeviceGetMaxClockInfo(
-                handle, nvml.NVML_CLOCK_MEM
-            )
+            clock_mem_max = nvml.nvmlDeviceGetMaxClockInfo(handle, nvml.NVML_CLOCK_MEM)
         except nvml.NVMLError:
             pass
 

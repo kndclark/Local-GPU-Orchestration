@@ -10,7 +10,6 @@ from worker_agent.hal.base import (
     SENSOR_NOT_AVAILABLE_FLOAT,
 )
 
-
 # ──────────────────────────────────────────────
 # GpuDevice dataclass tests
 # ──────────────────────────────────────────────

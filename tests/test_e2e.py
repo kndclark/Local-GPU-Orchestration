@@ -28,13 +28,15 @@ async def test_end_to_end_orchestration():
             scheduler.queue.get_nowait()
 
         # 2. Set up simulated hardware
-        sim = SimulatedBackend(config=SimulatedConfig(
-            num_gpus=1,
-            vendor="NVIDIA",
-            model="Simulated RTX 4090",
-            total_vram_mb=24576,
-            noise=False,
-        ))
+        sim = SimulatedBackend(
+            config=SimulatedConfig(
+                num_gpus=1,
+                vendor="NVIDIA",
+                model="Simulated RTX 4090",
+                total_vram_mb=24576,
+                noise=False,
+            )
+        )
         sim_gpus = sim.discover_gpus()
 
         # 3. Worker Agent Registration with GPU info

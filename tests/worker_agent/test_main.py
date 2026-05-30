@@ -19,19 +19,26 @@ def mock_settings():
 @pytest.mark.asyncio
 async def test_agent_daemon_lifecycle(mock_settings):
     # Mock all external dependencies
-    with patch("worker_agent.main.WorkerClient") as mock_client_cls, \
-         patch("worker_agent.main.HardwareManager") as mock_hw_cls, \
-         patch("worker_agent.main.JobExecutor") as mock_exec_cls:
+    with (
+        patch("worker_agent.main.WorkerClient") as mock_client_cls,
+        patch("worker_agent.main.HardwareManager") as mock_hw_cls,
+        patch("worker_agent.main.JobExecutor") as mock_exec_cls,
+    ):
 
         # Setup mock client
         mock_client = AsyncMock()
         mock_client.connect = MagicMock()
         mock_client.register_node.return_value = True
         mock_client.send_heartbeat.return_value = True
-        
+
         # Simulate one job being returned, then none
         mock_client.request_job.side_effect = [
-            {"job_id": "job-1", "workload_type": "test-workload", "args": [], "env_vars": {}},
+            {
+                "job_id": "job-1",
+                "workload_type": "test-workload",
+                "args": [],
+                "env_vars": {},
+            },
             None,
             None,
         ]
@@ -65,13 +72,13 @@ async def test_agent_daemon_lifecycle(mock_settings):
         mock_hw.detect.assert_called_once()
         mock_client.connect.assert_called_once()
         mock_client.register_node.assert_called_once()
-        
+
         # Heartbeat loop should have run at least once
         assert mock_client.send_heartbeat.call_count >= 1
 
         # Job executor should have processed job-1
         mock_executor.execute_job.assert_called_once()
-        
+
         # Job status should have been updated to COMPLETED
         mock_client.update_job_status.assert_called_with(
             job_id="job-1", status="COMPLETED", error_message=""

@@ -26,6 +26,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = FIFOScheduler(maxsize=100)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start gRPC server
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
     print("gRPC Control Plane listening on [::]:50051")
     yield
     await server.stop(0)
+
 
 app = FastAPI(title="GPU Orchestrator Control Plane", lifespan=lifespan)
 
@@ -216,6 +218,8 @@ async def get_node(node_id: str, db: Session = Depends(get_db)):
         gpus=[_gpu_to_response(g) for g in node.gpus],
     )
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("control_plane.main:app", host="0.0.0.0", port=8000, reload=True)

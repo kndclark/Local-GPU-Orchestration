@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 from worker_agent.hal.base import SENSOR_NOT_AVAILABLE_FLOAT
 from worker_agent.hal.nvidia import NvidiaBackend
 
-
 # ──────────────────────────────────────────────
 # Helpers: mock pynvml objects
 # ──────────────────────────────────────────────
@@ -85,27 +84,19 @@ def _make_mock_pynvml(
 
     # Temperature
     mock.NVML_TEMPERATURE_GPU = 0
-    mock.nvmlDeviceGetTemperature.side_effect = (
-        lambda h, _: temps[handles.index(h)]
-    )
+    mock.nvmlDeviceGetTemperature.side_effect = lambda h, _: temps[handles.index(h)]
 
     # Utilization
-    mock.nvmlDeviceGetUtilizationRates.side_effect = (
-        lambda h: utils[handles.index(h)]
-    )
+    mock.nvmlDeviceGetUtilizationRates.side_effect = lambda h: utils[handles.index(h)]
 
     # Fan speed
-    mock.nvmlDeviceGetFanSpeed.side_effect = (
-        lambda h: fan_speeds[handles.index(h)]
-    )
+    mock.nvmlDeviceGetFanSpeed.side_effect = lambda h: fan_speeds[handles.index(h)]
 
     # Power
-    mock.nvmlDeviceGetPowerUsage.side_effect = (
-        lambda h: power_draws[handles.index(h)]
-    )
-    mock.nvmlDeviceGetEnforcedPowerLimit.side_effect = (
-        lambda h: power_limits[handles.index(h)]
-    )
+    mock.nvmlDeviceGetPowerUsage.side_effect = lambda h: power_draws[handles.index(h)]
+    mock.nvmlDeviceGetEnforcedPowerLimit.side_effect = lambda h: power_limits[
+        handles.index(h)
+    ]
 
     # Clocks
     mock.NVML_CLOCK_GRAPHICS = 0
@@ -128,20 +119,20 @@ def _make_mock_pynvml(
     mock.nvmlDeviceGetMaxClockInfo.side_effect = _get_max_clock
 
     # PCIe
-    mock.nvmlDeviceGetCurrPcieLinkGeneration.side_effect = (
-        lambda h: pcie_gens[handles.index(h)]
-    )
-    mock.nvmlDeviceGetCurrPcieLinkWidth.side_effect = (
-        lambda h: pcie_widths[handles.index(h)]
-    )
+    mock.nvmlDeviceGetCurrPcieLinkGeneration.side_effect = lambda h: pcie_gens[
+        handles.index(h)
+    ]
+    mock.nvmlDeviceGetCurrPcieLinkWidth.side_effect = lambda h: pcie_widths[
+        handles.index(h)
+    ]
 
     # Encoder / decoder utilization
-    mock.nvmlDeviceGetEncoderUtilization.side_effect = (
-        lambda h: encoder_utils[handles.index(h)]
-    )
-    mock.nvmlDeviceGetDecoderUtilization.side_effect = (
-        lambda h: decoder_utils[handles.index(h)]
-    )
+    mock.nvmlDeviceGetEncoderUtilization.side_effect = lambda h: encoder_utils[
+        handles.index(h)
+    ]
+    mock.nvmlDeviceGetDecoderUtilization.side_effect = lambda h: decoder_utils[
+        handles.index(h)
+    ]
 
     # NVMLError for testing failure paths
     mock.NVMLError = type("NVMLError", (Exception,), {})

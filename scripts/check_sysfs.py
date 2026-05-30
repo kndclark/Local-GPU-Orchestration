@@ -68,7 +68,9 @@ def main():
     for card_path in card_paths:
         card_name = card_path.split("/")[4]  # e.g. "card0"
         vendor = read_file(f"{card_path}/vendor")
-        is_amd = vendor.strip().lower() == AMD_VENDOR_ID if "[ERROR" not in vendor else False
+        is_amd = (
+            vendor.strip().lower() == AMD_VENDOR_ID if "[ERROR" not in vendor else False
+        )
 
         print(f"── {card_name} {'(AMD ✓)' if is_amd else '(non-AMD)'} ──")
         print(f"   Path: {card_path}")
@@ -87,7 +89,11 @@ def main():
 
         # Find hwmon directories
         hwmon_base = f"{card_path}/hwmon"
-        hwmon_dirs = sorted(glob.glob(f"{hwmon_base}/hwmon*")) if os.path.isdir(hwmon_base) else []
+        hwmon_dirs = (
+            sorted(glob.glob(f"{hwmon_base}/hwmon*"))
+            if os.path.isdir(hwmon_base)
+            else []
+        )
 
         if hwmon_dirs:
             for hwmon_dir in hwmon_dirs:
@@ -114,8 +120,11 @@ def main():
         print()
 
     # Summary
-    amd_cards = [p for p in card_paths
-                 if read_file(f"{p}/vendor").strip().lower() == AMD_VENDOR_ID]
+    amd_cards = [
+        p
+        for p in card_paths
+        if read_file(f"{p}/vendor").strip().lower() == AMD_VENDOR_ID
+    ]
     print("=" * 60)
     print(f"Summary: {len(amd_cards)} AMD GPU(s) found out of {len(card_paths)} total")
     if amd_cards:

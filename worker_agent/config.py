@@ -3,6 +3,7 @@ import socket
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
+
 class WorkerSettings(BaseSettings):
     """Configuration for the Worker Agent daemon."""
 

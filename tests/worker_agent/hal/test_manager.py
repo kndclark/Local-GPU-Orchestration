@@ -11,7 +11,6 @@ from worker_agent.hal.base import (
 from worker_agent.hal.simulated import SimulatedBackend, SimulatedConfig
 from worker_agent.hal.manager import HardwareManager
 
-
 # ──────────────────────────────────────────────
 # Helper: Fake backend for injection
 # ──────────────────────────────────────────────
@@ -183,9 +182,7 @@ class TestManagerSystemTelemetry:
         mock_psutil.disk_io_counters.return_value = MagicMock(
             read_bytes=0, write_bytes=0
         )
-        mock_psutil.net_io_counters.return_value = MagicMock(
-            bytes_sent=0, bytes_recv=0
-        )
+        mock_psutil.net_io_counters.return_value = MagicMock(bytes_sent=0, bytes_recv=0)
 
         mgr = HardwareManager(backends=[FakeBackend("test", available=True)])
         telem = mgr.get_system_telemetry()

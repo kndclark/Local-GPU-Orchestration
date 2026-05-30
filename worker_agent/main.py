@@ -73,7 +73,7 @@ class AgentDaemon:
         self._running = False
         for task in self._tasks:
             task.cancel()
-        
+
         await self.client.close()
         self.hw_manager.shutdown()
         logger.info("Worker Agent stopped.")
@@ -86,10 +86,12 @@ class AgentDaemon:
                 await self.client.send_heartbeat(
                     telemetry=telem, active_jobs=self.active_jobs
                 )
-                logger.info(f"Sent heartbeat: {len(telem.gpus)} GPUs, {telem.cpu_utilization_percent:.1f}% CPU, {len(self.active_jobs)} jobs")
+                logger.info(
+                    f"Sent heartbeat: {len(telem.gpus)} GPUs, {telem.cpu_utilization_percent:.1f}% CPU, {len(self.active_jobs)} jobs"
+                )
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
-            
+
             await asyncio.sleep(self.settings.heartbeat_interval_seconds)
 
     async def _job_poll_loop(self):
@@ -101,7 +103,7 @@ class AgentDaemon:
                     logger.info(f"Received job: {job['job_id']}")
                     # For Phase 2, we execute jobs sequentially (blocking this loop).
                     # A true production agent would dispatch to a background worker pool.
-                    
+
                     # Ensure we're using the right executable context
                     executable = sys.executable
                     if job["workload_type"] != "python":
@@ -129,7 +131,7 @@ class AgentDaemon:
                     logger.info(f"Job {job['job_id']} finished with status {status}")
             except Exception as e:
                 logger.error(f"Error in job poll loop: {e}")
-            
+
             await asyncio.sleep(self.settings.job_poll_interval_seconds)
 
 
