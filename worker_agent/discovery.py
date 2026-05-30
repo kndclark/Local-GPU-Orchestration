@@ -1,49 +1,70 @@
-import socket
 import logging
+import socket
+import asyncio
+from zeroconf import ServiceStateChange
+from zeroconf.asyncio import AsyncZeroconf, AsyncServiceBrowser
 
 logger = logging.getLogger(__name__)
 
-def discover_orchestrator(discovery_port: int = 50052, timeout: float = 3.0) -> str | None:
+class OrchestratorListener:
+    def __init__(self):
+        self.found_url = None
+
+    def on_service_state_change(self, zeroconf, service_type, name, state_change):
+        if state_change != ServiceStateChange.Added:
+            return
+        asyncio.create_task(self._resolve_service(zeroconf, service_type, name))
+
+    async def _resolve_service(self, zeroconf, service_type, name):
+        async_zc = AsyncZeroconf(zc=zeroconf)
+        info = await async_zc.async_get_service_info(service_type, name)
+        if info:
+            addresses = [socket.inet_ntoa(a) for a in info.addresses]
+            if addresses:
+                def _score_ip(ip: str) -> int:
+                    if ip.startswith("192.168."): return 100
+                    if ip.startswith("10."): return 90
+                    if ip.startswith("172."): return 80
+                    if ip.startswith("169.254."): return 10
+                    if ip == "127.0.0.1": return 0
+                    return 50
+
+                addresses.sort(key=_score_ip, reverse=True)
+                ip = addresses[0]
+                self.found_url = f"{ip}:{info.port}"
+                logger.info(f"Auto-discovery successful! Found orchestrator at {self.found_url}")
+
+async def discover_orchestrator(timeout: float = 5.0) -> str | None:
     """
-    Broadcasts a UDP packet to find the Control Plane on the local network.
+    Finds the Control Plane on the local network using mDNS (Zeroconf).
     
     Returns:
         The URL of the orchestrator (e.g. '192.168.0.93:50051') if found,
         otherwise None.
     """
-    logger.info("Starting UDP auto-discovery for Control Plane...")
+    logger.info("Starting mDNS auto-discovery for Control Plane...")
     
-    # Create UDP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    zeroconf = AsyncZeroconf()
+    listener = OrchestratorListener()
     
-    # Enable broadcasting mode
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    # Start browsing for the GPU Orchestrator service
+    browser = AsyncServiceBrowser(zeroconf.zeroconf, "_gpuorch._tcp.local.", handlers=[listener.on_service_state_change])
     
-    # Set a timeout so it doesn't block forever
-    sock.settimeout(timeout)
-
-    message = b"GPU_ORCHESTRATOR_DISCOVER"
+    import time
+    start_time = time.time()
     
     try:
-        # Send broadcast to the specific discovery port
-        sock.sendto(message, ('<broadcast>', discovery_port))
-        
-        # Wait for a response
-        data, addr = sock.recvfrom(1024)
-        resp = data.decode('utf-8', errors='ignore').strip()
-        
-        if resp.startswith("GPU_ORCHESTRATOR_HERE:"):
-            grpc_port = resp.split(":")[1]
-            server_ip = addr[0]
-            url = f"{server_ip}:{grpc_port}"
-            logger.info(f"Auto-discovery successful! Found orchestrator at {url}")
-            return url
+        # Poll the listener until a service is found or timeout is reached
+        while time.time() - start_time < timeout:
+            if listener.found_url:
+                return listener.found_url
+            await asyncio.sleep(0.1)
             
-    except socket.timeout:
         logger.warning(f"Auto-discovery timed out after {timeout} seconds.")
     except Exception as e:
         logger.error(f"Auto-discovery failed: {e}")
     finally:
-        sock.close()
+        await browser.async_cancel()
+        await zeroconf.async_close()
         
     return None

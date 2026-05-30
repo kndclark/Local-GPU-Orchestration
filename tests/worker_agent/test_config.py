@@ -8,7 +8,7 @@ def test_default_settings():
     os.environ.pop("NODE_ID", None)
 
     settings = WorkerSettings()
-    assert settings.orchestrator_url == "localhost:50051"
+    assert settings.orchestrator_url == "auto"
     assert settings.node_id is not None  # Auto-generated
     assert settings.heartbeat_interval_seconds == 5.0
     assert settings.job_poll_interval_seconds == 2.0

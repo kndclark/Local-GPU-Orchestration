@@ -51,7 +51,7 @@ class AgentDaemon:
         # 3. Connect to control plane
         if self.settings.orchestrator_url == "auto":
             from worker_agent.discovery import discover_orchestrator
-            url = discover_orchestrator()
+            url = await discover_orchestrator()
             if url:
                 self.settings.orchestrator_url = url
                 self.client.server_address = url

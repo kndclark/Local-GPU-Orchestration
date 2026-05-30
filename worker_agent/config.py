@@ -8,7 +8,7 @@ class WorkerSettings(BaseSettings):
     """Configuration for the Worker Agent daemon."""
 
     orchestrator_url: str = "auto"
-    node_id: str = f"{socket.gethostname()}-{hex(uuid.getnode())[2:10]}"
+    node_id: str = socket.gethostname()
     heartbeat_interval_seconds: float = 5.0
     job_poll_interval_seconds: float = 2.0
     supported_workloads: list[str] = ["python", "ffmpeg"]

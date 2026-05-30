@@ -39,12 +39,9 @@ async def lifespan(app: FastAPI):
     )
     server.add_insecure_port("[::]:50051")
     await server.start()
-    from control_plane.discovery import DiscoveryServerProtocol
-    loop = asyncio.get_running_loop()
-    transport, protocol = await loop.create_datagram_endpoint(
-        lambda: DiscoveryServerProtocol(grpc_port=50051),
-        local_addr=('0.0.0.0', 50052)
-    )
+    from control_plane.discovery import ZeroconfAdvertiser
+    advertiser = ZeroconfAdvertiser(grpc_port=50051)
+    await advertiser.async_start()
 
     print("gRPC Control Plane listening on [::]:50051")
 
@@ -63,7 +60,7 @@ async def lifespan(app: FastAPI):
     yield
 
     metrics_task.cancel()
-    transport.close()
+    await advertiser.async_stop()
     await server.stop(0)
 
 
