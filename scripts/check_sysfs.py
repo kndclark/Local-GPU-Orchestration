@@ -76,7 +76,7 @@ def main():
         print(f"   Path: {card_path}")
 
         # Device-level files
-        print(f"\n   Device files:")
+        print("\n   Device files:")
         for label, filename in SYSFS_FILES.items():
             full_path = f"{card_path}/{filename}"
             exists = os.path.exists(full_path)

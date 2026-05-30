@@ -87,7 +87,9 @@ class AgentDaemon:
                     telemetry=telem, active_jobs=self.active_jobs
                 )
                 logger.info(
-                    f"Sent heartbeat: {len(telem.gpus)} GPUs, {telem.cpu_utilization_percent:.1f}% CPU, {len(self.active_jobs)} jobs"
+                    f"Sent heartbeat: {len(telem.gpus)} GPUs, "
+                    f"{telem.cpu_utilization_percent:.1f}% CPU, "
+                    f"{len(self.active_jobs)} jobs"
                 )
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
@@ -102,13 +104,14 @@ class AgentDaemon:
                 if job:
                     logger.info(f"Received job: {job['job_id']}")
                     # For Phase 2, we execute jobs sequentially (blocking this loop).
-                    # A true production agent would dispatch to a background worker pool.
+                    # A true production agent would dispatch to a background worker
+                    # pool.
 
                     # Ensure we're using the right executable context
                     executable = sys.executable
                     if job["workload_type"] != "python":
-                        # If not python, the workload_type might be the executable itself
-                        # e.g., 'ffmpeg'
+                        # If not python, the workload_type might be the executable
+                        # itself e.g., 'ffmpeg'
                         executable = job["workload_type"]
 
                     self.active_jobs.append(job["job_id"])

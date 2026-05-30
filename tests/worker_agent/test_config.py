@@ -1,4 +1,3 @@
-import pytest
 import os
 from worker_agent.config import WorkerSettings
 
