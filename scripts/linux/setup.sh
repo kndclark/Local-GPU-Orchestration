@@ -32,7 +32,10 @@ if lspci | grep -i -E "vga|3d|display" | grep -i amd &> /dev/null; then
     echo "✓ AMD GPU detected."
 fi
 
-if [ "$HAS_NVIDIA" = false ] && [ "$HAS_AMD" = false ]; then
+if [ "$1" == "--force-nvidia" ]; then
+    HAS_NVIDIA=true
+    echo "ℹ Forcing NVIDIA dependency installation via flag."
+elif [ "$HAS_NVIDIA" = false ] && [ "$HAS_AMD" = false ]; then
     echo "ℹ No discrete GPU detected, or detection failed. Will install base dependencies."
 fi
 

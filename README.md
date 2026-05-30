@@ -38,6 +38,8 @@ cd Local-GPU-Orchestration
 powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
+*(Note: If the auto-detection fails to find your NVIDIA GPU, you can pass a flag to force the installation of NVIDIA telemetry tools: `./run.sh --force-nvidia` or `.\run.ps1 -ForceNvidia`)*
+
 ---
 
 ### Manual Setup
@@ -64,6 +66,8 @@ Open PowerShell and run:
 .\scripts\windows\setup.ps1
 ```
 
+*(Note: You can pass `--force-nvidia` or `-ForceNvidia` to these scripts if your NVIDIA GPU wasn't automatically detected, or manually install via `pip install -e .[nvidia]` in the `.venv`).*
+
 ### 3. Start the Worker Agent
 Once setup is complete, run the start script to launch the daemon:
 
@@ -81,7 +85,7 @@ The agent will automatically register with the control plane and begin sending h
 
 ## Monitoring (Prometheus + Grafana)
 
-The orchestrator exposes Prometheus metrics from both the **Control Plane** (port 8000) and **Worker Agents** (port 9101). A pre-configured Docker Compose stack is provided for visualization.
+The orchestrator exposes Prometheus metrics from both the **Control Plane** (port 8080) and **Worker Agents** (port 9101). A pre-configured Docker Compose stack is provided for visualization.
 
 ### Start the Monitoring Stack
 
@@ -115,7 +119,7 @@ Edit `monitoring/prometheus.yml` to add additional worker agent targets:
 
 | Service | Port | Path |
 |---------|------|------|
-| Control Plane | 8000 | `/metrics/` |
+| Control Plane | 8080 | `/metrics/` |
 | Worker Agent | 9101 (configurable) | `/metrics` |
 
 ## Development

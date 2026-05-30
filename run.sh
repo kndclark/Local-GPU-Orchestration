@@ -16,9 +16,13 @@ echo "=================================================="
 chmod +x scripts/linux/setup.sh
 chmod +x scripts/linux/start_worker.sh
 
-# 1. Run Setup
+SETUP_ARGS=""
+if [[ "$1" == "--force-nvidia" ]]; then
+    SETUP_ARGS="--force-nvidia"
+fi
+
 echo ">> Running setup..."
-if ! ./scripts/linux/setup.sh; then
+if ! ./scripts/linux/setup.sh $SETUP_ARGS; then
     echo "❌ Setup failed. Aborting."
     exit 1
 fi

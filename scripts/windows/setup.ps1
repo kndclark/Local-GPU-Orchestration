@@ -1,6 +1,10 @@
 # setup.ps1
 # Automates the setup of the GPU Orchestrator Worker Agent on Windows
 
+param(
+    [switch]$ForceNvidia
+)
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "==================================================" -ForegroundColor Cyan
@@ -35,7 +39,10 @@ foreach ($vc in $videoControllers) {
     }
 }
 
-if (-not $hasNvidia -and -not $hasAmd) {
+if ($ForceNvidia) {
+    $hasNvidia = $true
+    Write-Host "[OK] Forcing NVIDIA dependency installation via flag." -ForegroundColor Yellow
+} elseif (-not $hasNvidia -and -not $hasAmd) {
     Write-Host "[INFO] No discrete GPU detected. Will install base dependencies." -ForegroundColor Yellow
 }
 

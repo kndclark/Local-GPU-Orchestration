@@ -13,7 +13,7 @@ scrape_configs:
   - job_name: "control_plane"
     metrics_path: "/metrics/"
     static_configs:
-      - targets: ["host.docker.internal:8000"]
+      - targets: ["host.docker.internal:8080"]
         labels:
           component: "control_plane"
 
@@ -22,17 +22,22 @@ scrape_configs:
   # configured metrics_port (default 9101).
   - job_name: "worker_agent"
     static_configs:
-      # Desktop (Windows host)
+      # Laptop (Windows host)
       - targets: ["host.docker.internal:9101"]
         labels:
           component: "worker_agent"
+          machine: "laptop"
+      # Desktop
+      - targets: ["192.168.0.190:9101"]
+        labels:
+          component: "worker_agent"
           machine: "desktop"
-      # To add more workers, uncomment and update:
-      # - targets: ["<steam-deck-ip>:9101"]
-      #   labels:
-      #     component: "worker_agent"
-      #     machine: "steamdeck"
-      # - targets: ["<rog-ally-ip>:9101"]
-      #   labels:
-      #     component: "worker_agent"
-      #     machine: "rogally"
+      # Steam Deck
+      - targets: ["192.168.0.234:9101"]
+        labels:
+          component: "worker_agent"
+          machine: "steamdeck"
+      - targets: ["192.168.0.108:9101"]
+        labels:
+          component: "worker_agent"
+          machine: "rogallyx"

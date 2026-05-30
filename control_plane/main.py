@@ -3,7 +3,6 @@ from pydantic import BaseModel
 import asyncio
 import uuid
 import json
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
@@ -250,6 +249,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "control_plane.main:app",
         host="0.0.0.0",  # nosec B104
-        port=8000,
+        port=8080,
         reload=True,
     )

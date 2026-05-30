@@ -72,7 +72,7 @@ Both the Control Plane and Worker Agent expose Prometheus metrics. This section 
 ### Architecture
 
 - **Worker Agent** (`worker_agent/metrics.py`): Gauges for local system/GPU telemetry, updated every heartbeat cycle. Served on port 9101 via `prometheus_client.start_http_server`.
-- **Control Plane** (`control_plane/metrics.py`): Cluster-level gauges derived from the database, refreshed every 15 seconds. Served on the existing FastAPI port 8000 at `/metrics/`.
+- **Control Plane** (`control_plane/metrics.py`): Cluster-level gauges derived from the database, refreshed every 15 seconds. Served on the existing FastAPI port 8080 at `/metrics/`.
 
 ### Adding a New Metric
 
@@ -122,7 +122,7 @@ def metrics(registry):
 
 ```bash
 # Check control plane metrics
-curl http://localhost:8000/metrics/
+curl http://localhost:8080/metrics/
 
 # Check worker agent metrics
 curl http://localhost:9101/metrics
