@@ -30,9 +30,47 @@ class OrchestratorListener:
                     return 50
 
                 addresses.sort(key=_score_ip, reverse=True)
-                ip = addresses[0]
-                self.found_url = f"{ip}:{info.port}"
-                logger.info(f"Auto-discovery successful! Found orchestrator at {self.found_url}")
+                
+                # Test connectivity to find a reachable IP concurrently
+                async def check_ip(test_ip: str, port: int) -> str:
+                    reader, writer = await asyncio.wait_for(
+                        asyncio.open_connection(test_ip, port), 
+                        timeout=1.0
+                    )
+                    writer.close()
+                    await writer.wait_closed()
+                    return test_ip
+
+                tasks = []
+                for test_ip in addresses:
+                    if test_ip == "127.0.0.1": 
+                        continue
+                    tasks.append(asyncio.create_task(check_ip(test_ip, info.port)))
+                
+                if tasks:
+                    while tasks:
+                        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                        
+                        reachable_ip = None
+                        for task in done:
+                            try:
+                                reachable_ip = task.result()
+                                break
+                            except Exception:
+                                pass
+                                
+                        if reachable_ip:
+                            # Cancel any remaining slow tasks
+                            for task in pending:
+                                task.cancel()
+                                
+                            self.found_url = f"{reachable_ip}:{info.port}"
+                            logger.info(f"Auto-discovery successful! Found reachable orchestrator at {self.found_url}")
+                            return
+                            
+                        tasks = list(pending)
+                            
+                logger.warning("Auto-discovery found the orchestrator, but none of its IP addresses were reachable.")
 
 async def discover_orchestrator(timeout: float = 5.0) -> str | None:
     """
