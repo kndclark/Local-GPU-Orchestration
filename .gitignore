@@ -5,3 +5,5 @@ __pycache__/
 *pb2_grpc.py
 .env
 monitoring/targets.json
+*.db
+orchestrator.db
