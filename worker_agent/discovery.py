@@ -63,12 +63,13 @@ class OrchestratorListener:
                         )
 
                         reachable_ip = None
-                        for task in done:
-                            try:
-                                reachable_ip = task.result()
-                                break
-                            except Exception:
-                                pass  # nosec B110
+                        for task in tasks:
+                            if task in done:
+                                try:
+                                    reachable_ip = task.result()
+                                    break
+                                except Exception:
+                                    pass  # nosec B110
 
                         if reachable_ip:
                             # Cancel any remaining slow tasks

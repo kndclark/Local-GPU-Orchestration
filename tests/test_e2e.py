@@ -19,7 +19,7 @@ async def test_end_to_end_orchestration():
     server = grpc.aio.server()
     service = OrchestratorService(db_session_factory=SessionLocal, scheduler=scheduler)
     orchestrator_pb2_grpc.add_OrchestratorServicer_to_server(service, server)
-    server.add_insecure_port("[::]:50051")
+    port = server.add_insecure_port("[::]:0")
     await server.start()
 
     try:
@@ -40,7 +40,7 @@ async def test_end_to_end_orchestration():
         sim_gpus = sim.discover_gpus()
 
         # 3. Worker Agent Registration with GPU info
-        worker = WorkerClient(node_id="test-node", server_address="localhost:50051")
+        worker = WorkerClient(node_id="test-node", server_address=f"localhost:{port}")
         success = await worker.register_node(
             hostname="test-host",
             gpus=sim_gpus,
