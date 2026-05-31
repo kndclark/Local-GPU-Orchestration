@@ -25,10 +25,20 @@ def metrics(registry):
 @pytest.fixture
 def gpu_devices():
     return [
-        GpuDevice(index=0, vendor="NVIDIA", model="RTX 4090",
-                  driver_version="555.42", total_vram_mb=24576),
-        GpuDevice(index=1, vendor="AMD", model="RX 7600",
-                  driver_version="6.1.0", total_vram_mb=8192),
+        GpuDevice(
+            index=0,
+            vendor="NVIDIA",
+            model="RTX 4090",
+            driver_version="555.42",
+            total_vram_mb=24576,
+        ),
+        GpuDevice(
+            index=1,
+            vendor="AMD",
+            model="RX 7600",
+            driver_version="6.1.0",
+            total_vram_mb=8192,
+        ),
     ]
 
 
@@ -186,21 +196,14 @@ class TestUpdateMetrics:
             "vendor": "NVIDIA",
             "model": "RTX 4090",
         }
-        assert registry.get_sample_value(
-            "worker_gpu_temperature_c", labels_0
-        ) == 65.0
-        assert registry.get_sample_value(
-            "worker_gpu_power_draw_w", labels_0
-        ) == 250.0
-        assert registry.get_sample_value(
-            "worker_gpu_vram_total_mb", labels_0
-        ) == 24576
-        assert registry.get_sample_value(
-            "worker_gpu_vram_free_mb", labels_0
-        ) == 20000
-        assert registry.get_sample_value(
-            "worker_gpu_utilization_percent", labels_0
-        ) == 82.0
+        assert registry.get_sample_value("worker_gpu_temperature_c", labels_0) == 65.0
+        assert registry.get_sample_value("worker_gpu_power_draw_w", labels_0) == 250.0
+        assert registry.get_sample_value("worker_gpu_vram_total_mb", labels_0) == 24576
+        assert registry.get_sample_value("worker_gpu_vram_free_mb", labels_0) == 20000
+        assert (
+            registry.get_sample_value("worker_gpu_utilization_percent", labels_0)
+            == 82.0
+        )
 
         # GPU 1 (AMD RX 7600)
         labels_1 = {
@@ -209,15 +212,9 @@ class TestUpdateMetrics:
             "vendor": "AMD",
             "model": "RX 7600",
         }
-        assert registry.get_sample_value(
-            "worker_gpu_temperature_c", labels_1
-        ) == 55.0
-        assert registry.get_sample_value(
-            "worker_gpu_power_draw_w", labels_1
-        ) == 120.0
-        assert registry.get_sample_value(
-            "worker_gpu_vram_total_mb", labels_1
-        ) == 8192
+        assert registry.get_sample_value("worker_gpu_temperature_c", labels_1) == 55.0
+        assert registry.get_sample_value("worker_gpu_power_draw_w", labels_1) == 120.0
+        assert registry.get_sample_value("worker_gpu_vram_total_mb", labels_1) == 8192
 
     def test_update_overwrites_previous_values(
         self, metrics, registry, gpu_devices, system_telemetry
@@ -247,10 +244,13 @@ class TestUpdateMetrics:
             active_job_count=5,
         )
 
-        assert registry.get_sample_value(
-            "worker_cpu_utilization_percent",
-            {"node_id": "test-node"},
-        ) == 95.0
+        assert (
+            registry.get_sample_value(
+                "worker_cpu_utilization_percent",
+                {"node_id": "test-node"},
+            )
+            == 95.0
+        )
 
         labels_0 = {
             "node_id": "test-node",
@@ -258,9 +258,7 @@ class TestUpdateMetrics:
             "vendor": "NVIDIA",
             "model": "RTX 4090",
         }
-        assert registry.get_sample_value(
-            "worker_gpu_temperature_c", labels_0
-        ) == 90.0
+        assert registry.get_sample_value("worker_gpu_temperature_c", labels_0) == 90.0
 
     def test_active_jobs_tracks_correctly(self, metrics, registry, gpu_devices):
         """Active jobs gauge should reflect exact count each update."""
@@ -272,9 +270,9 @@ class TestUpdateMetrics:
             gpu_devices=[],
             active_job_count=0,
         )
-        assert registry.get_sample_value(
-            "worker_active_jobs", {"node_id": "node-a"}
-        ) == 0
+        assert (
+            registry.get_sample_value("worker_active_jobs", {"node_id": "node-a"}) == 0
+        )
 
         metrics.update(
             node_id="node-a",
@@ -282,6 +280,6 @@ class TestUpdateMetrics:
             gpu_devices=[],
             active_job_count=7,
         )
-        assert registry.get_sample_value(
-            "worker_active_jobs", {"node_id": "node-a"}
-        ) == 7
+        assert (
+            registry.get_sample_value("worker_active_jobs", {"node_id": "node-a"}) == 7
+        )

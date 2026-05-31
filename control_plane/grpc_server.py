@@ -83,17 +83,19 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                     if ip in local_ips:
                         is_local = True
                 except Exception:
-                    pass
+                    pass  # nosec B110
 
             if is_local:
-                # Prometheus runs in a docker container, so it needs host.docker.internal
+                # Prometheus runs in docker, so it needs host.docker.internal
                 # to reach the worker running on the host machine.
                 ip = "host.docker.internal"
 
             try:
                 self._update_prometheus_targets(ip, request.hostname)
             except Exception as e:
-                logging.getLogger(__name__).error(f"Failed to update prometheus targets: {e}")
+                logging.getLogger(__name__).error(
+                    "Failed to update prometheus targets: %s", e
+                )
 
         return orchestrator_pb2.RegisterNodeResponse(
             success=True, message="Node registered"
@@ -110,9 +112,9 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                     workers = json.load(f)
             except Exception:
                 workers = []
-                
+
         target_str = f"{ip}:{port}"
-        
+
         # Check if already exists
         for w in workers:
             if target_str in w.get("targets", []):
@@ -123,14 +125,13 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                 return
 
         # Add new
-        workers.append({
-            "targets": [target_str],
-            "labels": {
-                "component": "worker_agent",
-                "machine": hostname
+        workers.append(
+            {
+                "targets": [target_str],
+                "labels": {"component": "worker_agent", "machine": hostname},
             }
-        })
-        
+        )
+
         with open(targets_file, "w") as f:
             json.dump(workers, f, indent=2)
 

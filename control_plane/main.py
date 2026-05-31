@@ -5,7 +5,6 @@ import uuid
 import json
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
 
 from prometheus_client import CollectorRegistry, make_asgi_app
 
@@ -40,6 +39,7 @@ async def lifespan(app: FastAPI):
     server.add_insecure_port("[::]:50051")
     await server.start()
     from control_plane.discovery import ZeroconfAdvertiser
+
     advertiser = ZeroconfAdvertiser(grpc_port=50051)
     await advertiser.async_start()
 

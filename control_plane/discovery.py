@@ -6,9 +6,10 @@ import ifaddr
 
 logger = logging.getLogger(__name__)
 
+
 class ZeroconfAdvertiser:
     """Advertises the Control Plane gRPC service via mDNS/Zeroconf."""
-    
+
     def __init__(self, grpc_port: int = 50051):
         self.grpc_port = grpc_port
         self.zeroconf = None
@@ -16,7 +17,7 @@ class ZeroconfAdvertiser:
 
     async def async_start(self):
         logger.info(f"Starting Zeroconf Advertiser for port {self.grpc_port}")
-        
+
         # Collect all local IPv4 addresses (excluding 127.0.0.1 if possible)
         addresses = []
         for adapter in ifaddr.get_adapters():
@@ -26,13 +27,13 @@ class ZeroconfAdvertiser:
                         addresses.append(socket.inet_aton(ip.ip))
                     except OSError:
                         pass
-        
+
         # Fallback to localhost if no other IPs found
         if not addresses:
             addresses = [socket.inet_aton("127.0.0.1")]
 
-        desc = {'service': 'GPU Orchestrator Control Plane'}
-        
+        desc = {"service": "GPU Orchestrator Control Plane"}
+
         # Standardize hostname format for Zeroconf
         hostname = socket.gethostname().replace(" ", "-").replace("_", "-")
 
