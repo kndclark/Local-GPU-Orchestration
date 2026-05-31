@@ -16,9 +16,17 @@ echo "=================================================="
 chmod +x scripts/linux/setup.sh
 chmod +x scripts/linux/start_worker.sh
 
-# 1. Run Setup
+SETUP_ARGS=""
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --force-nvidia) SETUP_ARGS="$SETUP_ARGS --force-nvidia"; shift ;;
+        --url) SETUP_ARGS="$SETUP_ARGS --url $2"; shift; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+done
+
 echo ">> Running setup..."
-if ! ./scripts/linux/setup.sh; then
+if ! ./scripts/linux/setup.sh $SETUP_ARGS; then
     echo "❌ Setup failed. Aborting."
     exit 1
 fi

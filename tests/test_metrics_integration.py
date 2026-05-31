@@ -51,7 +51,9 @@ def seeded_db():
         db.add(Job(job_id="ij1", workload_type="python", status="PENDING"))
         db.add(
             Job(
-                job_id="ij2", workload_type="ffmpeg", status="RUNNING",
+                job_id="ij2",
+                workload_type="ffmpeg",
+                status="RUNNING",
                 assigned_node_id="integration-node",
             )
         )
@@ -122,10 +124,7 @@ class TestControlPlaneMetricsEndpoint:
     def test_metrics_values_match_db(self, client, seeded_db):
         """Verify that metric values reflect the seeded database state."""
         resp = client.get("/metrics/")
-        families = {
-            f.name: f
-            for f in text_string_to_metric_families(resp.text)
-        }
+        families = {f.name: f for f in text_string_to_metric_families(resp.text)}
 
         # cluster_nodes_total should be 1
         nodes_samples = families["cluster_nodes_total"].samples
@@ -138,24 +137,17 @@ class TestControlPlaneMetricsEndpoint:
         # cluster_gpus_by_vendor{vendor="NVIDIA"} should be 1
         vendor_samples = families["cluster_gpus_by_vendor"].samples
         nvidia_samples = [
-            s for s in vendor_samples
-            if s.labels.get("vendor") == "NVIDIA"
+            s for s in vendor_samples if s.labels.get("vendor") == "NVIDIA"
         ]
         assert len(nvidia_samples) >= 1
         assert nvidia_samples[0].value == 1.0
 
         # cluster_jobs_total{status="PENDING"} should be 1
         job_samples = families["cluster_jobs_total"].samples
-        pending = [
-            s for s in job_samples
-            if s.labels.get("status") == "PENDING"
-        ]
+        pending = [s for s in job_samples if s.labels.get("status") == "PENDING"]
         assert len(pending) >= 1
         assert pending[0].value == 1.0
 
-        running = [
-            s for s in job_samples
-            if s.labels.get("status") == "RUNNING"
-        ]
+        running = [s for s in job_samples if s.labels.get("status") == "RUNNING"]
         assert len(running) >= 1
         assert running[0].value == 1.0
