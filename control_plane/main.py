@@ -5,7 +5,6 @@ import uuid
 import json
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
 
 from prometheus_client import CollectorRegistry, make_asgi_app
 
@@ -17,12 +16,10 @@ import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
 from control_plane.grpc_server import OrchestratorService
 
-# For phase 1/2, we use in-memory sqlite to avoid requiring
-# running Postgres just for tests.
+# Use a persistent SQLite database so registered nodes survive restarts
 engine = create_engine(
-    "sqlite:///:memory:",
+    "sqlite:///orchestrator.db",
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
 )
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -41,6 +38,11 @@ async def lifespan(app: FastAPI):
     )
     server.add_insecure_port("[::]:50051")
     await server.start()
+    from control_plane.discovery import ZeroconfAdvertiser
+
+    advertiser = ZeroconfAdvertiser(grpc_port=50051)
+    await advertiser.async_start()
+
     print("gRPC Control Plane listening on [::]:50051")
 
     # Start metrics refresh background task
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI):
     yield
 
     metrics_task.cancel()
+    await advertiser.async_stop()
     await server.stop(0)
 
 

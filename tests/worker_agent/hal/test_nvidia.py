@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from worker_agent.hal.base import SENSOR_NOT_AVAILABLE_FLOAT
 from worker_agent.hal.nvidia import NvidiaBackend
 
@@ -161,8 +161,9 @@ class TestNvidiaAvailability:
 
     def test_unavailable_when_pynvml_not_installed(self):
         """When pynvml can't be imported, the backend should not be available."""
-        backend = NvidiaBackend(_pynvml=None)
-        assert backend.is_available() is False
+        with patch.dict("sys.modules", {"pynvml": None}):
+            backend = NvidiaBackend(_pynvml=None)
+            assert backend.is_available() is False
 
 
 # ──────────────────────────────────────────────

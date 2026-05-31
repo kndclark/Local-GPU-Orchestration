@@ -18,26 +18,9 @@ scrape_configs:
           component: "control_plane"
 
   # ── Worker Agents ────────────────────────
-  # Add one target per worker agent. Workers expose /metrics on their
-  # configured metrics_port (default 9101).
+  # Targets are loaded dynamically from targets.json
+  # Run `configure.ps1` or `configure.sh` to add workers.
   - job_name: "worker_agent"
-    static_configs:
-      # Laptop (Windows host)
-      - targets: ["host.docker.internal:9101"]
-        labels:
-          component: "worker_agent"
-          machine: "laptop"
-      # Desktop
-      - targets: ["192.168.0.190:9101"]
-        labels:
-          component: "worker_agent"
-          machine: "desktop"
-      # Steam Deck
-      - targets: ["192.168.0.234:9101"]
-        labels:
-          component: "worker_agent"
-          machine: "steamdeck"
-      - targets: ["192.168.0.108:9101"]
-        labels:
-          component: "worker_agent"
-          machine: "rogallyx"
+    file_sd_configs:
+      - files:
+        - "/etc/prometheus/targets.json"

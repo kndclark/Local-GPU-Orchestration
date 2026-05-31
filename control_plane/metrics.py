@@ -100,14 +100,16 @@ class ControlPlaneMetrics:
         nodes = db.query(Node).all()
         self.nodes_total.set(len(nodes))
 
+        # Clear per-node labels so stale/disconnected nodes disappear from dashboards
+        self.node_cpu_util.clear()
+        self.node_ram_util.clear()
+        self.node_gpu_count.clear()
+        self.node_heartbeat_age.clear()
+
         for node in nodes:
             labels = {"node_id": node.node_id, "hostname": node.hostname}
-            self.node_cpu_util.labels(**labels).set(
-                node.cpu_utilization_percent
-            )
-            self.node_ram_util.labels(**labels).set(
-                node.ram_utilization_percent
-            )
+            self.node_cpu_util.labels(**labels).set(node.cpu_utilization_percent)
+            self.node_ram_util.labels(**labels).set(node.ram_utilization_percent)
             self.node_gpu_count.labels(**labels).set(len(node.gpus))
 
             # Heartbeat age
@@ -126,9 +128,7 @@ class ControlPlaneMetrics:
         self.gpus_total.set(len(gpus))
 
         total_vram = sum(g.total_vram_mb for g in gpus)
-        free_vram = sum(
-            g.free_vram_mb for g in gpus if g.free_vram_mb >= 0
-        )
+        free_vram = sum(g.free_vram_mb for g in gpus if g.free_vram_mb >= 0)
         self.vram_total.set(total_vram)
         self.vram_free.set(free_vram)
 
@@ -141,6 +141,4 @@ class ControlPlaneMetrics:
         jobs = db.query(Job).all()
         status_counts: Counter = Counter(j.status for j in jobs)
         for status in ["PENDING", "RUNNING", "COMPLETED", "FAILED"]:
-            self.jobs_total.labels(status=status).set(
-                status_counts.get(status, 0)
-            )
+            self.jobs_total.labels(status=status).set(status_counts.get(status, 0))

@@ -1,4 +1,3 @@
-import uuid
 import socket
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
@@ -7,8 +6,8 @@ from pydantic import field_validator
 class WorkerSettings(BaseSettings):
     """Configuration for the Worker Agent daemon."""
 
-    orchestrator_url: str = "localhost:50051"
-    node_id: str = f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
+    orchestrator_url: str = "auto"
+    node_id: str = socket.gethostname()
     heartbeat_interval_seconds: float = 5.0
     job_poll_interval_seconds: float = 2.0
     supported_workloads: list[str] = ["python", "ffmpeg"]
@@ -18,6 +17,8 @@ class WorkerSettings(BaseSettings):
     @field_validator("orchestrator_url")
     @classmethod
     def ensure_port(cls, v: str) -> str:
+        if v.lower() == "auto":
+            return "auto"
         if ":" not in v:
             return f"{v}:50051"
         return v

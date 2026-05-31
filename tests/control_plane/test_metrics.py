@@ -98,24 +98,22 @@ def populated_db(db_session):
     db_session.add(gpu2)
 
     # Jobs in various states
-    db_session.add(
-        Job(job_id="j1", workload_type="python", status="PENDING")
-    )
-    db_session.add(
-        Job(job_id="j2", workload_type="python", status="PENDING")
-    )
+    db_session.add(Job(job_id="j1", workload_type="python", status="PENDING"))
+    db_session.add(Job(job_id="j2", workload_type="python", status="PENDING"))
     db_session.add(
         Job(
-            job_id="j3", workload_type="ffmpeg", status="RUNNING",
+            job_id="j3",
+            workload_type="ffmpeg",
+            status="RUNNING",
             assigned_node_id="desktop-001",
         )
     )
-    db_session.add(
-        Job(job_id="j4", workload_type="python", status="COMPLETED")
-    )
+    db_session.add(Job(job_id="j4", workload_type="python", status="COMPLETED"))
     db_session.add(
         Job(
-            job_id="j5", workload_type="ffmpeg", status="FAILED",
+            job_id="j5",
+            workload_type="ffmpeg",
+            status="FAILED",
             error_message="Segfault",
         )
     )
@@ -164,72 +162,64 @@ class TestRefreshClusterMetrics:
 
         assert registry.get_sample_value("cluster_nodes_total") == 2
         assert registry.get_sample_value("cluster_gpus_total") == 2
-        assert registry.get_sample_value("cluster_vram_total_mb") == (
-            24576 + 8192
-        )
-        assert registry.get_sample_value("cluster_vram_free_mb") == (
-            20000 + 6000
-        )
+        assert registry.get_sample_value("cluster_vram_total_mb") == (24576 + 8192)
+        assert registry.get_sample_value("cluster_vram_free_mb") == (20000 + 6000)
 
     def test_gpus_by_vendor(self, metrics, registry, populated_db):
         metrics.refresh(populated_db)
 
-        assert registry.get_sample_value(
-            "cluster_gpus_by_vendor", {"vendor": "NVIDIA"}
-        ) == 1
-        assert registry.get_sample_value(
-            "cluster_gpus_by_vendor", {"vendor": "AMD"}
-        ) == 1
+        assert (
+            registry.get_sample_value("cluster_gpus_by_vendor", {"vendor": "NVIDIA"})
+            == 1
+        )
+        assert (
+            registry.get_sample_value("cluster_gpus_by_vendor", {"vendor": "AMD"}) == 1
+        )
 
     def test_job_status_breakdown(self, metrics, registry, populated_db):
         metrics.refresh(populated_db)
 
-        assert registry.get_sample_value(
-            "cluster_jobs_total", {"status": "PENDING"}
-        ) == 2
-        assert registry.get_sample_value(
-            "cluster_jobs_total", {"status": "RUNNING"}
-        ) == 1
-        assert registry.get_sample_value(
-            "cluster_jobs_total", {"status": "COMPLETED"}
-        ) == 1
-        assert registry.get_sample_value(
-            "cluster_jobs_total", {"status": "FAILED"}
-        ) == 1
+        assert (
+            registry.get_sample_value("cluster_jobs_total", {"status": "PENDING"}) == 2
+        )
+        assert (
+            registry.get_sample_value("cluster_jobs_total", {"status": "RUNNING"}) == 1
+        )
+        assert (
+            registry.get_sample_value("cluster_jobs_total", {"status": "COMPLETED"})
+            == 1
+        )
+        assert (
+            registry.get_sample_value("cluster_jobs_total", {"status": "FAILED"}) == 1
+        )
 
     def test_per_node_metrics(self, metrics, registry, populated_db):
         metrics.refresh(populated_db)
 
         labels_1 = {"node_id": "desktop-001", "hostname": "khamul-desktop"}
-        assert registry.get_sample_value(
-            "node_cpu_utilization_percent", labels_1
-        ) == 25.0
-        assert registry.get_sample_value(
-            "node_ram_utilization_percent", labels_1
-        ) == 40.0
-        assert registry.get_sample_value(
-            "node_gpu_count", labels_1
-        ) == 1
+        assert (
+            registry.get_sample_value("node_cpu_utilization_percent", labels_1) == 25.0
+        )
+        assert (
+            registry.get_sample_value("node_ram_utilization_percent", labels_1) == 40.0
+        )
+        assert registry.get_sample_value("node_gpu_count", labels_1) == 1
 
         labels_2 = {"node_id": "ally-002", "hostname": "rog-ally"}
-        assert registry.get_sample_value(
-            "node_cpu_utilization_percent", labels_2
-        ) == 60.0
+        assert (
+            registry.get_sample_value("node_cpu_utilization_percent", labels_2) == 60.0
+        )
 
     def test_heartbeat_age(self, metrics, registry, populated_db):
         metrics.refresh(populated_db)
 
         labels_1 = {"node_id": "desktop-001", "hostname": "khamul-desktop"}
-        age_1 = registry.get_sample_value(
-            "node_last_heartbeat_age_seconds", labels_1
-        )
+        age_1 = registry.get_sample_value("node_last_heartbeat_age_seconds", labels_1)
         # Node 1's heartbeat was 5 seconds ago
         assert 3.0 < age_1 < 30.0
 
         labels_2 = {"node_id": "ally-002", "hostname": "rog-ally"}
-        age_2 = registry.get_sample_value(
-            "node_last_heartbeat_age_seconds", labels_2
-        )
+        age_2 = registry.get_sample_value("node_last_heartbeat_age_seconds", labels_2)
         # Node 2's heartbeat was 30 seconds ago
         assert 25.0 < age_2 < 60.0
 

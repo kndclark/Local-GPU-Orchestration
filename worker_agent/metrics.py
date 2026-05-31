@@ -160,15 +160,9 @@ class WorkerMetrics:
             active_job_count: Current number of active jobs.
         """
         # ── System ────────────────────────────
-        self.cpu_util.labels(node_id=node_id).set(
-            telemetry.cpu_utilization_percent
-        )
-        self.ram_util.labels(node_id=node_id).set(
-            telemetry.ram_utilization_percent
-        )
-        self.ram_available.labels(node_id=node_id).set(
-            telemetry.ram_available_mb
-        )
+        self.cpu_util.labels(node_id=node_id).set(telemetry.cpu_utilization_percent)
+        self.ram_util.labels(node_id=node_id).set(telemetry.ram_utilization_percent)
+        self.ram_available.labels(node_id=node_id).set(telemetry.ram_available_mb)
         self.active_jobs.labels(node_id=node_id).set(active_job_count)
 
         # ── GPUs ──────────────────────────────
@@ -185,31 +179,21 @@ class WorkerMetrics:
             }
 
             self.gpu_temp.labels(**labels).set(gpu_telem.temperature_c)
-            self.gpu_temp_hotspot.labels(**labels).set(
-                gpu_telem.temperature_hotspot_c
-            )
+            self.gpu_temp_hotspot.labels(**labels).set(gpu_telem.temperature_hotspot_c)
             self.gpu_fan.labels(**labels).set(gpu_telem.fan_speed_percent)
             self.gpu_power_draw.labels(**labels).set(gpu_telem.power_draw_w)
             self.gpu_power_limit.labels(**labels).set(gpu_telem.power_limit_w)
-            self.gpu_util.labels(**labels).set(
-                gpu_telem.gpu_utilization_percent
-            )
-            self.gpu_mem_util.labels(**labels).set(
-                gpu_telem.memory_utilization_percent
-            )
+            self.gpu_util.labels(**labels).set(gpu_telem.gpu_utilization_percent)
+            self.gpu_mem_util.labels(**labels).set(gpu_telem.memory_utilization_percent)
             self.gpu_clock_core.labels(**labels).set(gpu_telem.clock_core_mhz)
-            self.gpu_clock_memory.labels(**labels).set(
-                gpu_telem.clock_memory_mhz
-            )
+            self.gpu_clock_memory.labels(**labels).set(gpu_telem.clock_memory_mhz)
             self.gpu_encoder_util.labels(**labels).set(
                 gpu_telem.encoder_utilization_percent
             )
             self.gpu_decoder_util.labels(**labels).set(
                 gpu_telem.decoder_utilization_percent
             )
-            self.gpu_pcie_bw.labels(**labels).set(
-                gpu_telem.pcie_bandwidth_percent
-            )
+            self.gpu_pcie_bw.labels(**labels).set(gpu_telem.pcie_bandwidth_percent)
 
             # VRAM: combine static total from device + live free/used
             vram_total = device.total_vram_mb if device else 0
