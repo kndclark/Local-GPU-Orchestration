@@ -1,5 +1,6 @@
 import json
 import logging
+import socket
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
@@ -71,12 +72,24 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
         elif peer.startswith("ipv6:"):
             ip = peer.split("]:")[0].replace("ipv6:[", "")
 
-        if ip in ("127.0.0.1", "::1", "localhost"):
-            # Prometheus runs in a docker container, so it needs host.docker.internal
-            # to reach the worker running on the host machine.
-            ip = "host.docker.internal"
-
         if ip:
+            # Check if this IP is actually one of the host's own local IPs
+            is_local = False
+            if ip in ("127.0.0.1", "::1", "localhost"):
+                is_local = True
+            else:
+                try:
+                    local_ips = socket.gethostbyname_ex(socket.gethostname())[2]
+                    if ip in local_ips:
+                        is_local = True
+                except Exception:
+                    pass
+
+            if is_local:
+                # Prometheus runs in a docker container, so it needs host.docker.internal
+                # to reach the worker running on the host machine.
+                ip = "host.docker.internal"
+
             try:
                 self._update_prometheus_targets(ip, request.hostname)
             except Exception as e:

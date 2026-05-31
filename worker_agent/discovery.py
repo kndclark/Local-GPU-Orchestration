@@ -6,6 +6,16 @@ from zeroconf.asyncio import AsyncZeroconf, AsyncServiceBrowser
 
 logger = logging.getLogger(__name__)
 
+def score_ip(ip: str) -> int:
+    """Score an IP address to prioritize standard local subnets over link-local/loopback."""
+    if ip.startswith("192.168."): return 100
+    if ip.startswith("10."): return 90
+    if ip.startswith("172."): return 80
+    if ip.startswith("169.254."): return 10
+    if ip == "127.0.0.1": return 0
+    return 50
+
+
 class OrchestratorListener:
     def __init__(self):
         self.found_url = None
@@ -21,15 +31,7 @@ class OrchestratorListener:
         if info:
             addresses = [socket.inet_ntoa(a) for a in info.addresses]
             if addresses:
-                def _score_ip(ip: str) -> int:
-                    if ip.startswith("192.168."): return 100
-                    if ip.startswith("10."): return 90
-                    if ip.startswith("172."): return 80
-                    if ip.startswith("169.254."): return 10
-                    if ip == "127.0.0.1": return 0
-                    return 50
-
-                addresses.sort(key=_score_ip, reverse=True)
+                addresses.sort(key=score_ip, reverse=True)
                 
                 # Test connectivity to find a reachable IP concurrently
                 async def check_ip(test_ip: str, port: int) -> str:
