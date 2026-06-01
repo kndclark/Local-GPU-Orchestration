@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 class ZeroconfAdvertiser:
     """Advertises the Control Plane gRPC service via mDNS/Zeroconf."""
 
-    def __init__(self, grpc_port: int = 50051):
+    def __init__(
+        self, grpc_port: int = 50051, service_type: str = "_gpuorch._tcp.local."
+    ):
         self.grpc_port = grpc_port
+        self.service_type = service_type
         self.zeroconf = None
         self.info = None
 
@@ -38,8 +41,8 @@ class ZeroconfAdvertiser:
         hostname = socket.gethostname().replace(" ", "-").replace("_", "-")
 
         self.info = ServiceInfo(
-            "_gpuorch._tcp.local.",
-            f"{hostname}._gpuorch._tcp.local.",
+            self.service_type,
+            f"{hostname}.{self.service_type}",
             addresses=addresses,
             port=self.grpc_port,
             properties=desc,

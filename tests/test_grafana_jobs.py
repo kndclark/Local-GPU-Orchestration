@@ -1,4 +1,5 @@
 import requests
+
 GRAFANA_URL = "http://localhost:3000"
 
 
