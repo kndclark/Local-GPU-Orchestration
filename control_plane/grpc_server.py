@@ -137,6 +137,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
     async def SendHeartbeat(self, request, context):
         from datetime import datetime, timezone
+
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:

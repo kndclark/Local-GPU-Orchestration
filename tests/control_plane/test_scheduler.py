@@ -1,5 +1,5 @@
 import pytest
-import os
+
 from control_plane.scheduler import HardwareAwareScheduler
 from control_plane.database.models import Node, Gpu, Job
 from control_plane.main import SessionLocal

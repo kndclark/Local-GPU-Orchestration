@@ -276,7 +276,7 @@ async def get_node_jobs(node_id: str, db: Session = Depends(get_db)):
     node = db.query(Node).filter(Node.node_id == node_id).first()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
-    
+
     # Return all jobs assigned to this node, ordered by created_at descending
     jobs = (
         db.query(Job)
@@ -284,7 +284,7 @@ async def get_node_jobs(node_id: str, db: Session = Depends(get_db)):
         .order_by(Job.created_at.desc())
         .all()
     )
-    
+
     return [
         JobResponse(
             job_id=j.job_id,

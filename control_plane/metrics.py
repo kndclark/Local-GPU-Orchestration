@@ -11,7 +11,7 @@ from collections import Counter
 from prometheus_client import CollectorRegistry, Gauge, REGISTRY
 from sqlalchemy.orm import Session
 
-from control_plane.database.models import Node, Gpu, Job
+from control_plane.database.models import Node, Job
 
 
 class ControlPlaneMetrics:

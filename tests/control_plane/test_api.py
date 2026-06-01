@@ -43,12 +43,13 @@ def test_submit_job_invalid():
 
 def test_get_job_found():
     from control_plane.database.models import Job
+
     with SessionLocal() as db:
         db.query(Job).delete()
         job = Job(job_id="api-job-123", workload_type="test", status="RUNNING")
         db.add(job)
         db.commit()
-    
+
     response = client.get("/api/v1/jobs/api-job-123")
     assert response.status_code == 200
     data = response.json()

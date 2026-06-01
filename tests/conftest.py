@@ -18,11 +18,13 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 control_plane.main.engine = engine
 control_plane.main.SessionLocal = TestingSessionLocal
 
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
 
 @pytest.fixture(autouse=True)
 def override_get_db():
@@ -32,6 +34,7 @@ def override_get_db():
             yield db
         finally:
             db.close()
+
     control_plane.main.app.dependency_overrides[control_plane.main.get_db] = _get_db
     yield
     control_plane.main.app.dependency_overrides.clear()

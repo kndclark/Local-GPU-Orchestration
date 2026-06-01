@@ -180,26 +180,31 @@ async def test_request_job_no_job(clean_db, mock_scheduler):
 async def test_send_heartbeat_updates_last_heartbeat(clean_db, mock_scheduler):
     service = OrchestratorService(clean_db, mock_scheduler)
     mock_context = MagicMock()
-    
+
     from datetime import datetime, timezone, timedelta
+
     old_time = datetime.now(timezone.utc) - timedelta(minutes=5)
-    
+
     with clean_db() as db:
         node = Node(node_id="hb-test", hostname="host", last_heartbeat=old_time)
         db.add(node)
         db.commit()
-        
+
     req = orchestrator_pb2.HeartbeatRequest(
         node_id="hb-test",
         cpu_utilization_percent=50.0,
         ram_utilization_percent=50.0,
         ram_available_mb=1000,
-        gpus=[]
+        gpus=[],
     )
     resp = await service.SendHeartbeat(req, mock_context)
     assert resp.acknowledged is True
-    
+
     with clean_db() as db:
         node = db.query(Node).filter(Node.node_id == "hb-test").first()
-        hb = node.last_heartbeat.replace(tzinfo=timezone.utc) if node.last_heartbeat.tzinfo is None else node.last_heartbeat
+        hb = (
+            node.last_heartbeat.replace(tzinfo=timezone.utc)
+            if node.last_heartbeat.tzinfo is None
+            else node.last_heartbeat
+        )
         assert hb > old_time
