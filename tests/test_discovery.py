@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 async def test_zeroconf_discovery():
     """Test that the ZeroconfAdvertiser can be discovered by the worker agent."""
 
-    # 1. Start a dummy TCP server on an ephemeral port so the reachability check succeeds
+    # Start a dummy TCP server on an ephemeral port for reliable test discovery
     async def dummy_handler(reader, writer):
         writer.close()
         await writer.wait_closed()
@@ -59,7 +59,6 @@ async def test_zeroconf_discovery():
 async def test_discovery_reachability_logic(advertised_ips, reachable_ips, expected_ip):
     """Test that discovery correctly sorts IPs and tests TCP reachability."""
     from worker_agent.discovery import OrchestratorListener
-    from zeroconf import ServiceStateChange
 
     listener = OrchestratorListener()
 
