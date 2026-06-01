@@ -24,8 +24,8 @@ async def test_end_to_end_orchestration():
 
     try:
         # Clear the global scheduler queue from any previous test runs
-        while not scheduler.queue.empty():
-            scheduler.queue.get_nowait()
+        scheduler.pending_jobs.clear()
+        scheduler._initialized = False
 
         # 2. Set up simulated hardware
         sim = SimulatedBackend(

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from control_plane.grpc_server import OrchestratorService
 from control_plane.proto import orchestrator_pb2
-from control_plane.database.models import Node
+from control_plane.database.models import Node, Job
 from control_plane.main import SessionLocal
 
 
@@ -130,3 +130,45 @@ async def test_register_node_local_host_ip(clean_db, mock_scheduler, targets_fil
     assert len(data) == 1
     # It must be mapped!
     assert data[0]["targets"] == ["host.docker.internal:9101"]
+
+
+@pytest.mark.asyncio
+async def test_request_job(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    mock_context = MagicMock()
+    
+    # Setup mock scheduler behavior
+    async def mock_get_job(*args, **kwargs):
+        return "job-123"
+    mock_scheduler.get_next_job_for_node = mock_get_job
+    
+    with clean_db() as db:
+        job = Job(job_id="job-123", workload_type="test", status="PENDING")
+        db.add(job)
+        db.commit()
+
+    req = orchestrator_pb2.JobRequestPlaceholder(node_id="test-node")
+    resp = await service.RequestJob(req, mock_context)
+    
+    assert resp.job_id == "job-123"
+    assert resp.workload_type == "test"
+    
+    with clean_db() as db:
+        job = db.query(Job).filter(Job.job_id == "job-123").first()
+        assert job.status == "RUNNING"
+        assert job.assigned_node_id == "test-node"
+
+
+@pytest.mark.asyncio
+async def test_request_job_no_job(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    mock_context = MagicMock()
+    
+    async def mock_get_no_job(*args, **kwargs):
+        return None
+    mock_scheduler.get_next_job_for_node = mock_get_no_job
+    
+    req = orchestrator_pb2.JobRequestPlaceholder(node_id="test-node")
+    resp = await service.RequestJob(req, mock_context)
+    
+    assert resp.job_id == ""

@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from prometheus_client import CollectorRegistry, make_asgi_app
 
 from control_plane.database.models import Base, Job, Node, Gpu
-from control_plane.scheduler import FIFOScheduler
+from control_plane.scheduler import HardwareAwareScheduler
 from control_plane.metrics import ControlPlaneMetrics
 from contextlib import asynccontextmanager
 import grpc.aio
@@ -24,7 +24,7 @@ engine = create_engine(
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-scheduler = FIFOScheduler(maxsize=100)
+scheduler = HardwareAwareScheduler()
 _cp_registry = CollectorRegistry()
 cp_metrics = ControlPlaneMetrics(registry=_cp_registry)
 
@@ -88,6 +88,7 @@ class JobCreate(BaseModel):
     workload_type: str
     args: list[str] = []
     env_vars: dict[str, str] = {}
+    requires_cuda: bool = False
 
 
 class JobResponse(BaseModel):
@@ -159,6 +160,7 @@ async def submit_job(job_req: JobCreate, db: Session = Depends(get_db)):
         workload_type=job_req.workload_type,
         args=json.dumps(job_req.args),
         env_vars=json.dumps(job_req.env_vars),
+        requires_cuda=job_req.requires_cuda,
         status="PENDING",
     )
     db.add(job)

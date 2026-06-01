@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime, timezone
 
@@ -82,6 +82,7 @@ class Job(Base):
     workload_type = Column(String, nullable=False)
     args = Column(String, default="[]")  # JSON string
     env_vars = Column(String, default="{}")  # JSON string
+    requires_cuda = Column(Boolean, default=False)
 
     status = Column(String, default="PENDING")
     error_message = Column(String, nullable=True)

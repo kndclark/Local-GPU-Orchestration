@@ -1,41 +1,92 @@
 import pytest
-from control_plane.scheduler import FIFOScheduler
+import os
+from control_plane.scheduler import HardwareAwareScheduler
+from control_plane.database.models import Node, Gpu, Job
+from control_plane.main import SessionLocal
+
+@pytest.fixture
+def db():
+    session = SessionLocal()
+    # Clean db
+    session.query(Job).delete()
+    session.query(Gpu).delete()
+    session.query(Node).delete()
+    session.commit()
+    yield session
+    session.close()
+
+@pytest.mark.asyncio
+async def test_scheduler_capability_matching(db):
+    scheduler = HardwareAwareScheduler()
+    
+    # Create an AMD Node
+    amd_node = Node(node_id="amd-node", hostname="amd-host")
+    amd_gpu = Gpu(node_id="amd-node", gpu_index=0, vendor="AMD", temperature_c=50.0, temperature_hotspot_c=55.0)
+    db.add(amd_node)
+    db.add(amd_gpu)
+    
+    # Create an NVIDIA Node
+    nv_node = Node(node_id="nv-node", hostname="nv-host")
+    nv_gpu = Gpu(node_id="nv-node", gpu_index=0, vendor="NVIDIA", temperature_c=50.0, temperature_hotspot_c=55.0)
+    db.add(nv_node)
+    db.add(nv_gpu)
+    
+    # Create jobs
+    cuda_job = Job(job_id="cuda-job", workload_type="test", requires_cuda=True, status="PENDING")
+    normal_job = Job(job_id="normal-job", workload_type="test", requires_cuda=False, status="PENDING")
+    db.add(cuda_job)
+    db.add(normal_job)
+    db.commit()
+
+    await scheduler.submit_job("cuda-job")
+    await scheduler.submit_job("normal-job")
+
+    # AMD node should skip the cuda job and get the normal job
+    job_id = await scheduler.get_next_job_for_node("amd-node", db)
+    assert job_id == "normal-job"
+
+    # NV node should get the cuda job
+    job_id = await scheduler.get_next_job_for_node("nv-node", db)
+    assert job_id == "cuda-job"
 
 
 @pytest.mark.asyncio
-async def test_scheduler_nominal():
-    scheduler = FIFOScheduler(maxsize=10)
+async def test_scheduler_thermal_throttling(db, monkeypatch):
+    monkeypatch.setenv("MAX_GPU_TEMP_C", "80.0")
+    scheduler = HardwareAwareScheduler()
+    
+    hot_node = Node(node_id="hot-node", hostname="hot-host")
+    hot_gpu = Gpu(node_id="hot-node", gpu_index=0, vendor="AMD", temperature_c=85.0, temperature_hotspot_c=90.0)
+    db.add(hot_node)
+    db.add(hot_gpu)
+    
+    normal_job = Job(job_id="job1", workload_type="test", requires_cuda=False, status="PENDING")
+    db.add(normal_job)
+    db.commit()
 
-    # Submit jobs
-    await scheduler.submit_job("job-1")
-    await scheduler.submit_job("job-2")
+    await scheduler.submit_job("job1")
 
-    assert scheduler.qsize() == 2
-
-    # Get jobs
-    job1 = await scheduler.get_next_job()
-    job2 = await scheduler.get_next_job()
-
-    assert job1 == "job-1"
-    assert job2 == "job-2"
-    assert scheduler.qsize() == 0
-
-
-@pytest.mark.asyncio
-async def test_scheduler_empty_queue():
-    scheduler = FIFOScheduler()
-
-    job = await scheduler.get_next_job()
-    assert job is None
+    job_id = await scheduler.get_next_job_for_node("hot-node", db)
+    assert job_id is None  # Throttled!
 
 
 @pytest.mark.asyncio
-async def test_scheduler_full_queue():
-    scheduler = FIFOScheduler(maxsize=2)
+async def test_scheduler_initialize_from_db(db):
+    scheduler = HardwareAwareScheduler()
+    
+    pending_job = Job(job_id="pending-1", workload_type="test", requires_cuda=False, status="PENDING")
+    running_job = Job(job_id="running-1", workload_type="test", requires_cuda=False, status="RUNNING")
+    db.add(pending_job)
+    db.add(running_job)
+    db.commit()
 
-    assert await scheduler.submit_job("job-1") is True
-    assert await scheduler.submit_job("job-2") is True
+    # Initialization is lazy, triggered on first get_next_job_for_node
+    # We can mock a node
+    node = Node(node_id="test-node", hostname="test-host")
+    gpu = Gpu(node_id="test-node", gpu_index=0, vendor="AMD", temperature_c=50.0, temperature_hotspot_c=50.0)
+    db.add(node)
+    db.add(gpu)
+    db.commit()
 
-    # Third job should fail to submit (queue full)
-    assert await scheduler.submit_job("job-3") is False
-    assert scheduler.qsize() == 2
+    job_id = await scheduler.get_next_job_for_node("test-node", db)
+    assert job_id == "pending-1"
