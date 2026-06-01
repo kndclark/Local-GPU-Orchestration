@@ -1,16 +1,63 @@
 import httpx
+import pytest
+import os
 
 GRAFANA_URL = "http://localhost:3000"
 
 
+@pytest.mark.skipif(
+    os.environ.get("GITHUB_ACTIONS") == "true"
+    and os.environ.get("INTEGRATION_TESTS") != "true",
+    reason="Requires a local testing environment, skip in CI unit tests",
+)
 def test_grafana_json_datasource_jobs():
     """
     TDD Approach: Verify that Grafana can successfully proxy a query through the
     JSON datasource and return the jobs for a given node.
     """
-    # 1. First, check if the Control Plane has jobs for KhamuDeckOLED
+    # 1. Setup Data: Insert a test node and job directly into the DB
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from control_plane.database.models import Node, Job
+
+    node_id = "grafana-test-node"
+
+    # The live server on port 8080 uses orchestrator.db on disk.
+    # The pytest conftest patches SessionLocal to be in-memory, so we must
+    # explicitly connect to the disk database to seed data for the live server.
+    engine = create_engine("sqlite:///orchestrator.db")
+    LiveSession = sessionmaker(bind=engine)
+
+    with LiveSession() as db:
+        # Delete existing to prevent unique constraint violations on re-runs
+        db.query(Job).filter(Job.assigned_node_id == node_id).delete()
+        db.query(Node).filter(Node.node_id == node_id).delete()
+
+        node = Node(
+            node_id=node_id,
+            hostname="grafana-test",
+            os="linux",
+            os_version="1.0",
+            cpu_count=4,
+            cpu_model="test",
+            total_ram_mb=8192,
+            supported_workloads="test",
+        )
+        job = Job(
+            job_id="grafana-test-job",
+            workload_type="test",
+            args="[]",
+            env_vars="{}",
+            assigned_node_id=node_id,
+            status="COMPLETED",
+        )
+        db.add(node)
+        db.add(job)
+        db.commit()
+
     with httpx.Client() as client:
-        cp_resp = client.get("http://localhost:8080/api/v1/nodes/KhamuDeckOLED/jobs")
+        # 2. Check if the Control Plane has jobs for the node
+        cp_resp = client.get(f"http://localhost:8080/api/v1/nodes/{node_id}/jobs")
         assert cp_resp.status_code == 200
         jobs = cp_resp.json()
         assert len(jobs) > 0, "No jobs in Control Plane to test with!"
@@ -27,7 +74,7 @@ def test_grafana_json_datasource_jobs():
                     "source": "url",
                     "url": (
                         "http://host.docker.internal:8080/api/v1"
-                        "/nodes/KhamuDeckOLED/jobs"
+                        f"/nodes/{node_id}/jobs"
                     ),
                     "format": "table",
                 }
