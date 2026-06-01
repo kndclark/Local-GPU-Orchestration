@@ -252,6 +252,33 @@
         { "expr": "worker_gpu_clock_core_mhz{node_id=\"$node_id\"}", "legendFormat": "Core — GPU {{ gpu_index }}", "refId": "A" },
         { "expr": "worker_gpu_clock_memory_mhz{node_id=\"$node_id\"}", "legendFormat": "Memory — GPU {{ gpu_index }}", "refId": "B" }
       ]
+    },
+    {
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "DS_JSON" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "id": 16,
+      "options": { "showHeader": true },
+      "title": "Completed / Failed Jobs Log",
+      "type": "table",
+      "targets": [
+        {
+          "refId": "A",
+          "method": "GET",
+          "urlPath": "nodes/${node_id}/jobs",
+          "queryParams": "",
+          "jsonPath": "$[*]",
+          "fields": [
+            { "jsonPath": "$.job_id", "type": "string", "name": "Job ID" },
+            { "jsonPath": "$.workload_type", "type": "string", "name": "Workload" },
+            { "jsonPath": "$.status", "type": "string", "name": "Status" },
+            { "jsonPath": "$.created_at", "type": "time", "name": "Created At" },
+            { "jsonPath": "$.updated_at", "type": "time", "name": "Updated At" }
+          ]
+        }
+      ]
     }
   ],
   "schemaVersion": 39,

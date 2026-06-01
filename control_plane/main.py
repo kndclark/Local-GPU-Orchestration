@@ -93,7 +93,10 @@ class JobCreate(BaseModel):
 
 class JobResponse(BaseModel):
     job_id: str
+    workload_type: str
     status: str
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class GpuResponse(BaseModel):
@@ -172,7 +175,13 @@ async def submit_job(job_req: JobCreate, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=503, detail="Scheduler queue is full")
 
-    return JobResponse(job_id=job_id, status=job.status)
+    return JobResponse(
+        job_id=job_id,
+        workload_type=job.workload_type,
+        status=job.status,
+        created_at=job.created_at.isoformat() if job.created_at else None,
+        updated_at=job.updated_at.isoformat() if job.updated_at else None,
+    )
 
 
 @app.get("/api/v1/jobs/{job_id}", response_model=JobResponse)
@@ -180,7 +189,13 @@ async def get_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return JobResponse(job_id=job.job_id, status=job.status)
+    return JobResponse(
+        job_id=job.job_id,
+        workload_type=job.workload_type,
+        status=job.status,
+        created_at=job.created_at.isoformat() if job.created_at else None,
+        updated_at=job.updated_at.isoformat() if job.updated_at else None,
+    )
 
 
 # ──────────────────────────────────────────────
@@ -254,6 +269,32 @@ async def get_node(node_id: str, db: Session = Depends(get_db)):
         supported_workloads=node.supported_workloads,
         gpus=[_gpu_to_response(g) for g in node.gpus],
     )
+
+
+@app.get("/api/v1/nodes/{node_id}/jobs", response_model=list[JobResponse])
+async def get_node_jobs(node_id: str, db: Session = Depends(get_db)):
+    node = db.query(Node).filter(Node.node_id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    # Return all jobs assigned to this node, ordered by created_at descending
+    jobs = (
+        db.query(Job)
+        .filter(Job.assigned_node_id == node_id)
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    
+    return [
+        JobResponse(
+            job_id=j.job_id,
+            workload_type=j.workload_type,
+            status=j.status,
+            created_at=j.created_at.isoformat() if j.created_at else None,
+            updated_at=j.updated_at.isoformat() if j.updated_at else None,
+        )
+        for j in jobs
+    ]
 
 
 if __name__ == "__main__":
