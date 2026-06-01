@@ -7,15 +7,17 @@ from worker_agent.discovery import discover_orchestrator
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
+
 @pytest.mark.asyncio
 async def test_zeroconf_discovery():
     """Test that the ZeroconfAdvertiser can be discovered by the worker agent."""
+
     # 1. Start a dummy TCP server on an ephemeral port so the reachability check succeeds
     async def dummy_handler(reader, writer):
         writer.close()
         await writer.wait_closed()
-        
-    server = await asyncio.start_server(dummy_handler, '0.0.0.0', 0)
+
+    server = await asyncio.start_server(dummy_handler, "0.0.0.0", 0)
     port = server.sockets[0].getsockname()[1]
 
     advertiser = ZeroconfAdvertiser(grpc_port=port)
@@ -52,23 +54,23 @@ async def test_zeroconf_discovery():
         (["127.0.0.1"], ["127.0.0.1"], None),
         # Nothing is reachable
         (["192.168.1.100"], [], None),
-    ]
+    ],
 )
 async def test_discovery_reachability_logic(advertised_ips, reachable_ips, expected_ip):
     """Test that discovery correctly sorts IPs and tests TCP reachability."""
     from worker_agent.discovery import OrchestratorListener
     from zeroconf import ServiceStateChange
-    
+
     listener = OrchestratorListener()
-    
+
     # Mock the Zeroconf info response
     mock_info = MagicMock()
     mock_info.port = 50051
     mock_info.addresses = [socket.inet_aton(ip) for ip in advertised_ips]
-    
+
     mock_zc = MagicMock()
     mock_zc.async_get_service_info = AsyncMock(return_value=mock_info)
-    
+
     # Mock asyncio.open_connection to simulate reachability
     async def mock_open_connection(ip, port):
         if ip in reachable_ips:
@@ -77,11 +79,11 @@ async def test_discovery_reachability_logic(advertised_ips, reachable_ips, expec
             return (MagicMock(), mock_writer)
         else:
             raise ConnectionError(f"Mock connection failed for {ip}")
-            
+
     with patch("worker_agent.discovery.AsyncZeroconf", return_value=mock_zc):
         with patch("asyncio.open_connection", side_effect=mock_open_connection):
             await listener._resolve_service(None, "_gpuorch._tcp.local.", "test")
-            
+
     if expected_ip:
         assert listener.found_url == f"{expected_ip}:50051"
     else:
