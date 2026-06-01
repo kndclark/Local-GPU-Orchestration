@@ -120,7 +120,7 @@ async def test_register_node_local_host_ip(clean_db, mock_scheduler, targets_fil
     # Mock socket to claim that 192.168.64.1 is one of the host's local IPs
     with patch(
         "socket.gethostbyname_ex",
-        return_value=("test-pc", [], ["192.168.0.50", "192.168.64.1"])
+        return_value=("test-pc", [], ["192.168.0.50", "192.168.64.1"]),
     ):
         resp = await service.RegisterNode(req, mock_context)
 
