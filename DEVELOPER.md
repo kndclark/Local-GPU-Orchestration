@@ -62,3 +62,69 @@ We use `bandit` to scan our Python code for common security vulnerabilities. We 
 ```bash
 bandit -r control_plane worker_agent -x control_plane/proto,worker_agent/proto
 ```
+
+---
+
+## Metrics Development (Prometheus)
+
+Both the Control Plane and Worker Agent expose Prometheus metrics. This section explains how to add new metrics and test them.
+
+### Architecture
+
+- **Worker Agent** (`worker_agent/metrics.py`): Gauges for local system/GPU telemetry, updated every heartbeat cycle. Served on port 9101 via `prometheus_client.start_http_server`.
+- **Control Plane** (`control_plane/metrics.py`): Cluster-level gauges derived from the database, refreshed every 15 seconds. Served on the existing FastAPI port 8080 at `/metrics/`.
+
+### Adding a New Metric
+
+1. **Define the gauge** in the appropriate `metrics.py` file (worker or control plane):
+   ```python
+   self.my_new_gauge = Gauge(
+       "worker_my_new_metric",
+       "Description of the metric",
+       ["node_id"],  # labels
+       registry=self._registry,
+   )
+   ```
+
+2. **Set the value** in the `update()` or `refresh()` method:
+   ```python
+   self.my_new_gauge.labels(node_id=node_id).set(value)
+   ```
+
+3. **Write a test** in the corresponding `test_metrics.py`:
+   ```python
+   def test_my_new_metric(self, metrics, registry, ...):
+       metrics.update(...)
+       assert registry.get_sample_value(
+           "worker_my_new_metric", {"node_id": "test-node"}
+       ) == expected_value
+   ```
+
+4. **Verify in Prometheus**: After starting the monitoring stack, search for your metric in the Prometheus UI at `http://localhost:9090/graph`.
+
+### Testing Metrics
+
+All metrics use dependency-injected `CollectorRegistry` instances so tests don't leak state:
+
+```python
+from prometheus_client import CollectorRegistry
+
+@pytest.fixture
+def registry():
+    return CollectorRegistry()
+
+@pytest.fixture
+def metrics(registry):
+    return WorkerMetrics(registry=registry)
+```
+
+### Quick Verification
+
+```bash
+# Check control plane metrics
+curl http://localhost:8080/metrics/
+
+# Check worker agent metrics
+curl http://localhost:9101/metrics
+```
+

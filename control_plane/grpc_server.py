@@ -1,4 +1,7 @@
 import json
+import logging
+import socket
+from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
 from control_plane.scheduler import FIFOScheduler
@@ -61,9 +64,76 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
             db.commit()
 
+        # Extract peer IP and auto-register with Prometheus
+        peer = context.peer()
+        ip = None
+        if peer.startswith("ipv4:"):
+            ip = peer.split(":")[1]
+        elif peer.startswith("ipv6:"):
+            ip = peer.split("]:")[0].replace("ipv6:[", "")
+
+        if ip:
+            # Check if this IP is actually one of the host's own local IPs
+            is_local = False
+            if ip in ("127.0.0.1", "::1", "localhost"):
+                is_local = True
+            else:
+                try:
+                    local_ips = socket.gethostbyname_ex(socket.gethostname())[2]
+                    if ip in local_ips:
+                        is_local = True
+                except Exception:
+                    pass  # nosec B110
+
+            if is_local:
+                # Prometheus runs in docker, so it needs host.docker.internal
+                # to reach the worker running on the host machine.
+                ip = "host.docker.internal"
+
+            try:
+                self._update_prometheus_targets(ip, request.hostname)
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "Failed to update prometheus targets: %s", e
+                )
+
         return orchestrator_pb2.RegisterNodeResponse(
             success=True, message="Node registered"
         )
+
+    def _update_prometheus_targets(self, ip: str, hostname: str, port: int = 9101):
+        targets_file = Path("monitoring/targets.json")
+        if not targets_file.exists():
+            targets_file.parent.mkdir(parents=True, exist_ok=True)
+            workers = []
+        else:
+            try:
+                with open(targets_file, "r") as f:
+                    workers = json.load(f)
+            except Exception:
+                workers = []
+
+        target_str = f"{ip}:{port}"
+
+        # Check if already exists
+        for w in workers:
+            if target_str in w.get("targets", []):
+                # Update the machine label if it changed
+                w.setdefault("labels", {})["machine"] = hostname
+                with open(targets_file, "w") as f:
+                    json.dump(workers, f, indent=2)
+                return
+
+        # Add new
+        workers.append(
+            {
+                "targets": [target_str],
+                "labels": {"component": "worker_agent", "machine": hostname},
+            }
+        )
+
+        with open(targets_file, "w") as f:
+            json.dump(workers, f, indent=2)
 
     async def SendHeartbeat(self, request, context):
         with self.db_session_factory() as db:

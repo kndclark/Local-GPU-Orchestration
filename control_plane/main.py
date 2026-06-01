@@ -1,30 +1,32 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+import asyncio
 import uuid
 import json
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+
+from prometheus_client import CollectorRegistry, make_asgi_app
 
 from control_plane.database.models import Base, Job, Node, Gpu
 from control_plane.scheduler import FIFOScheduler
+from control_plane.metrics import ControlPlaneMetrics
 from contextlib import asynccontextmanager
 import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
 from control_plane.grpc_server import OrchestratorService
 
-# For phase 1/2, we use in-memory sqlite to avoid requiring
-# running Postgres just for tests.
+# Use a persistent SQLite database so registered nodes survive restarts
 engine = create_engine(
-    "sqlite:///:memory:",
+    "sqlite:///orchestrator.db",
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
 )
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = FIFOScheduler(maxsize=100)
+_cp_registry = CollectorRegistry()
+cp_metrics = ControlPlaneMetrics(registry=_cp_registry)
 
 
 @asynccontextmanager
@@ -36,12 +38,37 @@ async def lifespan(app: FastAPI):
     )
     server.add_insecure_port("[::]:50051")
     await server.start()
+    from control_plane.discovery import ZeroconfAdvertiser
+
+    advertiser = ZeroconfAdvertiser(grpc_port=50051)
+    await advertiser.async_start()
+
     print("gRPC Control Plane listening on [::]:50051")
+
+    # Start metrics refresh background task
+    async def _metrics_refresh_loop():
+        while True:
+            try:
+                with SessionLocal() as db:
+                    cp_metrics.refresh(db)
+            except Exception:  # nosec B110
+                pass
+            await asyncio.sleep(15)
+
+    metrics_task = asyncio.create_task(_metrics_refresh_loop())
+
     yield
+
+    metrics_task.cancel()
+    await advertiser.async_stop()
     await server.stop(0)
 
 
 app = FastAPI(title="GPU Orchestrator Control Plane", lifespan=lifespan)
+
+# Mount Prometheus /metrics endpoint
+metrics_app = make_asgi_app(registry=_cp_registry)
+app.mount("/metrics", metrics_app)
 
 
 def get_db():
@@ -225,6 +252,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "control_plane.main:app",
         host="0.0.0.0",  # nosec B104
-        port=8000,
+        port=8080,
         reload=True,
     )

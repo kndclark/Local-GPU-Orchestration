@@ -1,0 +1,26 @@
+# GPU Orchestrator — Prometheus Scrape Configuration
+#
+# Targets use host.docker.internal to reach services running on the
+# Docker host machine. Adjust static_configs if workers run on
+# different machines.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # ── Control Plane ────────────────────────
+  - job_name: "control_plane"
+    metrics_path: "/metrics/"
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          component: "control_plane"
+
+  # ── Worker Agents ────────────────────────
+  # Targets are loaded dynamically from targets.json
+  # Run `configure.ps1` or `configure.sh` to add workers.
+  - job_name: "worker_agent"
+    file_sd_configs:
+      - files:
+        - "/etc/prometheus/targets.json"

@@ -1,6 +1,11 @@
 # run.ps1
 # One-click quick install and run script for the GPU Orchestrator Worker (Windows)
 
+param(
+    [switch]$ForceNvidia,
+    [string]$OrchestratorUrl = "auto"
+)
+
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -13,7 +18,11 @@ Write-Host "==================================================" -ForegroundColor
 # 1. Run Setup
 Write-Host "`n>> Running setup..." -ForegroundColor Cyan
 try {
-    .\scripts\windows\setup.ps1
+    if ($ForceNvidia) {
+        .\scripts\windows\setup.ps1 -ForceNvidia -OrchestratorUrl $OrchestratorUrl
+    } else {
+        .\scripts\windows\setup.ps1 -OrchestratorUrl $OrchestratorUrl
+    }
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
         throw "Setup script exited with code $LASTEXITCODE"
     }

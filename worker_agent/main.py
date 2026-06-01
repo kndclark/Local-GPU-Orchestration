@@ -3,10 +3,13 @@ import logging
 import platform
 import sys
 
+from prometheus_client import start_http_server
+
 from worker_agent.config import WorkerSettings
 from worker_agent.client import WorkerClient
 from worker_agent.hal.manager import HardwareManager
 from worker_agent.executor import JobExecutor
+from worker_agent.metrics import WorkerMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,7 @@ class AgentDaemon:
         )
         self.hw_manager = HardwareManager()
         self.executor = JobExecutor()
+        self.worker_metrics = WorkerMetrics()
         self._running = False
         self._tasks: list[asyncio.Task] = []
         self.active_jobs: list[str] = []
@@ -33,15 +37,37 @@ class AgentDaemon:
 
         # 1. Initialize hardware
         self.hw_manager.detect()
-        gpus = self.hw_manager.get_gpu_devices()
+        self._gpu_devices = self.hw_manager.get_gpu_devices()
 
-        # 2. Connect to control plane
+        # 2. Start Prometheus metrics server
+        if self.settings.metrics_enabled:
+            start_http_server(
+                port=self.settings.metrics_port,
+            )
+            logger.info(
+                f"Prometheus metrics server on port {self.settings.metrics_port}"
+            )
+
+        # 3. Connect to control plane
+        if self.settings.orchestrator_url == "auto":
+            from worker_agent.discovery import discover_orchestrator
+
+            url = await discover_orchestrator()
+            if url:
+                self.settings.orchestrator_url = url
+                self.client.server_address = url
+            else:
+                logger.error(
+                    "Failed to auto-discover orchestrator. Set ORCHESTRATOR_URL in .env"
+                )
+                return
+
         self.client.connect()
 
-        # 3. Register node
+        # 4. Register node
         success = await self.client.register_node(
             hostname=platform.node(),
-            gpus=gpus,
+            gpus=self._gpu_devices,
             supported_workloads=self.settings.supported_workloads,
             os_name=platform.system().lower(),
             os_version=platform.release(),
@@ -55,13 +81,13 @@ class AgentDaemon:
 
         logger.info("Successfully registered with orchestrator.")
 
-        # 4. Spawn background loops
+        # 5. Spawn background loops
         self._tasks = [
             asyncio.create_task(self._heartbeat_loop()),
             asyncio.create_task(self._job_poll_loop()),
         ]
 
-        # 5. Wait for shutdown
+        # 6. Wait for shutdown
         try:
             await asyncio.gather(*self._tasks)
         except asyncio.CancelledError:
@@ -86,6 +112,16 @@ class AgentDaemon:
                 await self.client.send_heartbeat(
                     telemetry=telem, active_jobs=self.active_jobs
                 )
+
+                # Update Prometheus gauges with the same telemetry data
+                if self.settings.metrics_enabled:
+                    self.worker_metrics.update(
+                        node_id=self.settings.node_id,
+                        telemetry=telem,
+                        gpu_devices=self._gpu_devices,
+                        active_job_count=len(self.active_jobs),
+                    )
+
                 logger.info(
                     f"Sent heartbeat: {len(telem.gpus)} GPUs, "
                     f"{telem.cpu_utilization_percent:.1f}% CPU, "

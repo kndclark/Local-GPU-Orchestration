@@ -1,6 +1,11 @@
 # setup.ps1
 # Automates the setup of the GPU Orchestrator Worker Agent on Windows
 
+param(
+    [switch]$ForceNvidia,
+    [string]$OrchestratorUrl = "auto"
+)
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "==================================================" -ForegroundColor Cyan
@@ -35,7 +40,10 @@ foreach ($vc in $videoControllers) {
     }
 }
 
-if (-not $hasNvidia -and -not $hasAmd) {
+if ($ForceNvidia) {
+    $hasNvidia = $true
+    Write-Host "[OK] Forcing NVIDIA dependency installation via flag." -ForegroundColor Yellow
+} elseif (-not $hasNvidia -and -not $hasAmd) {
     Write-Host "[INFO] No discrete GPU detected. Will install base dependencies." -ForegroundColor Yellow
 }
 
@@ -70,14 +78,9 @@ $pythonPath = ".venv\Scripts\python.exe"
 Write-Host "`n==================================================" -ForegroundColor Cyan
 Write-Host " Configuration" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "The worker needs the address of the Control Plane (e.g., 192.168.1.100:50051)."
-$orchUrl = Read-Host "Orchestrator URL [Press Enter to accept default: localhost:50051]"
+Write-Host "The worker will use Orchestrator URL: $OrchestratorUrl"
 
-if ([string]::IsNullOrWhiteSpace($orchUrl)) {
-    $orchUrl = "localhost:50051"
-}
-
-"ORCHESTRATOR_URL=`"$orchUrl`"" | Out-File -FilePath ".env" -Encoding utf8
+"ORCHESTRATOR_URL=`"$OrchestratorUrl`"" | Out-File -FilePath ".env" -Encoding utf8
 Write-Host "[OK] Configuration saved to .env" -ForegroundColor Green
 
 Write-Host "`n==================================================" -ForegroundColor Cyan
