@@ -5,6 +5,7 @@ from collections import deque
 from sqlalchemy.orm import Session
 from control_plane.database.models import Job, Node
 
+
 class HardwareAwareScheduler:
     def __init__(self):
         self.pending_jobs: deque[str] = deque()
@@ -14,7 +15,12 @@ class HardwareAwareScheduler:
     def initialize(self, db: Session):
         """Loads existing PENDING jobs from the database on startup."""
         if not self._initialized:
-            pending_jobs = db.query(Job).filter(Job.status == "PENDING").order_by(Job.created_at).all()
+            pending_jobs = (
+                db.query(Job)
+                .filter(Job.status == "PENDING")
+                .order_by(Job.created_at)
+                .all()
+            )
             for job in pending_jobs:
                 self.pending_jobs.append(job.job_id)
             self._initialized = True
@@ -51,15 +57,15 @@ class HardwareAwareScheduler:
         # Find first matching job
         for job_id in list(self.pending_jobs):
             job = db.query(Job).filter(Job.job_id == job_id).first()
-            
+
             # Clean up missing or non-pending jobs (e.g. if modified elsewhere)
             if not job or job.status != "PENDING":
                 self.pending_jobs.remove(job_id)
                 continue
-                
+
             if job.requires_cuda and not has_nvidia:
                 continue
-                
+
             # Match found! Remove from queue and return
             self.pending_jobs.remove(job_id)
             return job_id

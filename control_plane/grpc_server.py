@@ -136,12 +136,14 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             json.dump(workers, f, indent=2)
 
     async def SendHeartbeat(self, request, context):
+        from datetime import datetime, timezone
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:
                 node.cpu_utilization_percent = request.cpu_utilization_percent
                 node.ram_utilization_percent = request.ram_utilization_percent
                 node.ram_available_mb = request.ram_available_mb
+                node.last_heartbeat = datetime.now(timezone.utc)
 
                 # Update per-GPU telemetry
                 for gpu_info in request.gpus:

@@ -97,8 +97,17 @@ class ControlPlaneMetrics:
         now = datetime.now(timezone.utc)
 
         # ── Nodes ─────────────────────────────
-        nodes = db.query(Node).all()
-        self.nodes_total.set(len(nodes))
+        all_nodes = db.query(Node).all()
+        active_nodes = []
+        for node in all_nodes:
+            if node.last_heartbeat:
+                hb = node.last_heartbeat
+                if hb.tzinfo is None:
+                    hb = hb.replace(tzinfo=timezone.utc)
+                if (now - hb).total_seconds() < 60:
+                    active_nodes.append(node)
+
+        self.nodes_total.set(len(active_nodes))
 
         # Clear per-node labels so stale/disconnected nodes disappear from dashboards
         self.node_cpu_util.clear()
@@ -106,7 +115,7 @@ class ControlPlaneMetrics:
         self.node_gpu_count.clear()
         self.node_heartbeat_age.clear()
 
-        for node in nodes:
+        for node in active_nodes:
             labels = {"node_id": node.node_id, "hostname": node.hostname}
             self.node_cpu_util.labels(**labels).set(node.cpu_utilization_percent)
             self.node_ram_util.labels(**labels).set(node.ram_utilization_percent)
@@ -124,16 +133,20 @@ class ControlPlaneMetrics:
             self.node_heartbeat_age.labels(**labels).set(age)
 
         # ── GPUs ──────────────────────────────
-        gpus = db.query(Gpu).all()
-        self.gpus_total.set(len(gpus))
+        active_gpus = []
+        for node in active_nodes:
+            active_gpus.extend(node.gpus)
 
-        total_vram = sum(g.total_vram_mb for g in gpus)
-        free_vram = sum(g.free_vram_mb for g in gpus if g.free_vram_mb >= 0)
+        self.gpus_total.set(len(active_gpus))
+
+        total_vram = sum(g.total_vram_mb for g in active_gpus)
+        free_vram = sum(g.free_vram_mb for g in active_gpus if g.free_vram_mb >= 0)
         self.vram_total.set(total_vram)
         self.vram_free.set(free_vram)
 
         # GPUs by vendor
-        vendor_counts: Counter = Counter(g.vendor for g in gpus)
+        vendor_counts: Counter = Counter(g.vendor for g in active_gpus)
+        self.gpus_by_vendor.clear()
         for vendor, count in vendor_counts.items():
             self.gpus_by_vendor.labels(vendor=vendor).set(count)
 

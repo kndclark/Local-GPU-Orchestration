@@ -175,6 +175,14 @@ async def submit_job(job_req: JobCreate, db: Session = Depends(get_db)):
     return JobResponse(job_id=job_id, status=job.status)
 
 
+@app.get("/api/v1/jobs/{job_id}", response_model=JobResponse)
+async def get_job(job_id: str, db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return JobResponse(job_id=job.job_id, status=job.status)
+
+
 # ──────────────────────────────────────────────
 # Node endpoints
 # ──────────────────────────────────────────────

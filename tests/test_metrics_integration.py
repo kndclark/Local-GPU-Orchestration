@@ -151,3 +151,37 @@ class TestControlPlaneMetricsEndpoint:
         running = [s for s in job_samples if s.labels.get("status") == "RUNNING"]
         assert len(running) >= 1
         assert running[0].value == 1.0
+
+
+    def test_stale_node_filtered_from_metrics(self, client):
+        from datetime import datetime, timezone, timedelta
+        with SessionLocal() as db:
+            db.query(Job).delete()
+            db.query(Gpu).delete()
+            db.query(Node).delete()
+            
+            # Stale node (older than 60s)
+            stale_node = Node(
+                node_id="stale-node",
+                hostname="stale-host",
+                last_heartbeat=datetime.now(timezone.utc) - timedelta(seconds=120)
+            )
+            db.add(stale_node)
+            
+            stale_gpu = Gpu(
+                node_id="stale-node",
+                gpu_index=0,
+                vendor="NVIDIA",
+                total_vram_mb=8000
+            )
+            db.add(stale_gpu)
+            db.commit()
+            
+            cp_metrics.refresh(db)
+            
+        resp = client.get("/metrics/")
+        families = {f.name: f for f in text_string_to_metric_families(resp.text)}
+        
+        # Should be 0 because it's stale
+        assert families["cluster_nodes_total"].samples[0].value == 0.0
+        assert families["cluster_gpus_total"].samples[0].value == 0.0
