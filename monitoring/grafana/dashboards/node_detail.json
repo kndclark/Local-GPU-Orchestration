@@ -254,29 +254,48 @@
       ]
     },
     {
-      "datasource": { "type": "marcusolsson-json-datasource", "uid": "DS_JSON" },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "DS_JSON" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } }
       },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
       "id": 16,
       "options": { "showHeader": true },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "job_id": 0,
+              "workload_type": 1,
+              "status": 2,
+              "created_at": 3,
+              "updated_at": 4
+            },
+            "renameByName": {
+              "job_id": "Job ID",
+              "workload_type": "Workload",
+              "status": "Status",
+              "created_at": "Created At",
+              "updated_at": "Updated At"
+            }
+          }
+        }
+      ],
       "title": "Completed / Failed Jobs Log",
       "type": "table",
       "targets": [
         {
           "refId": "A",
-          "method": "GET",
-          "urlPath": "nodes/${node_id}/jobs",
-          "queryParams": "",
-          "jsonPath": "$[*]",
-          "fields": [
-            { "jsonPath": "$.job_id", "type": "string", "name": "Job ID" },
-            { "jsonPath": "$.workload_type", "type": "string", "name": "Workload" },
-            { "jsonPath": "$.status", "type": "string", "name": "Status" },
-            { "jsonPath": "$.created_at", "type": "time", "name": "Created At" },
-            { "jsonPath": "$.updated_at", "type": "time", "name": "Updated At" }
-          ]
+          "type": "json",
+          "source": "url",
+          "url": "http://host.docker.internal:8080/api/v1/nodes/${node_id}/jobs",
+          "format": "table",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          }
         }
       ]
     }
