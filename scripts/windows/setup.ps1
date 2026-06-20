@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\common.ps1"
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host " GPU Orchestrator Worker Agent Setup (Windows)    " -ForegroundColor Cyan
@@ -15,10 +16,11 @@ Write-Host ""
 
 # 1. Check for Python 3
 try {
-    $pythonVersion = & python --version 2>&1
-    Write-Host "[OK] Python found: $pythonVersion" -ForegroundColor Green
+    $Python = Find-Python
+    $pythonVersion = & $Python --version 2>&1
+    Write-Host "[OK] Python found: $pythonVersion (via '$Python')" -ForegroundColor Green
 } catch {
-    Write-Host "[X] Python is not installed or not in your PATH. Please install Python 3 and try again." -ForegroundColor Red
+    Write-Host "[X] $_" -ForegroundColor Red
     exit 1
 }
 
@@ -48,11 +50,15 @@ if ($ForceNvidia) {
 }
 
 # 3. Create Virtual Environment
-Write-Host "`nCreating virtual environment (.venv)..."
-& python -m venv .venv
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[X] Failed to create virtual environment." -ForegroundColor Red
-    exit 1
+if (Test-Path ".venv\Scripts\python.exe") {
+    Write-Host "`n[OK] Virtual environment already exists, skipping creation." -ForegroundColor Green
+} else {
+    Write-Host "`nCreating virtual environment (.venv)..."
+    & $Python -m venv .venv
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[X] Failed to create virtual environment." -ForegroundColor Red
+        exit 1
+    }
 }
 
 

@@ -5,14 +5,16 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location -Path $ScriptDir
+. "$ScriptDir\scripts\windows\common.ps1"
 
-# Check if python is available
-try {
-    $pythonVersion = python --version 2>&1
-} catch {
-    Write-Host "[X] Python is not installed or not in PATH." -ForegroundColor Red
-    exit 1
+if (Test-Path ".venv\Scripts\python.exe") {
+    $Python = ".venv\Scripts\python.exe"
+} else {
+    try { $Python = Find-Python } catch {
+        Write-Host "[X] $_" -ForegroundColor Red
+        exit 1
+    }
 }
 
 Write-Host ">> Launching configuration tool..." -ForegroundColor Cyan
-python .\scripts\configure.py
+& $Python .\scripts\configure.py

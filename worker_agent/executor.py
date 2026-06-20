@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,11 @@ class JobExecutor:
         """
         env = os.environ.copy()
         env.update(env_vars)
+
+        if not os.path.isabs(executable) and shutil.which(executable) is None:
+            msg = f"Executable not found on PATH: '{executable}'"
+            logger.error(f"Job {job_id} failed: {msg}")
+            return False, msg
 
         logger.info(f"Executing job {job_id}: {executable} {' '.join(args)}")
 
