@@ -91,7 +91,9 @@ class OrchestratorListener:
                 )
 
 
-async def discover_orchestrator(timeout: float = 5.0) -> str | None:
+async def discover_orchestrator(
+    timeout: float = 5.0, service_type: str = "_gpuorch._tcp.local."
+) -> str | None:
     """
     Finds the Control Plane on the local network using mDNS (Zeroconf).
 
@@ -107,7 +109,7 @@ async def discover_orchestrator(timeout: float = 5.0) -> str | None:
     # Start browsing for the GPU Orchestrator service
     browser = AsyncServiceBrowser(
         zeroconf.zeroconf,
-        "_gpuorch._tcp.local.",
+        service_type,
         handlers=[listener.on_service_state_change],
     )
 

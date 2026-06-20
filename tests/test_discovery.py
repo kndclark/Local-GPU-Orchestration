@@ -20,7 +20,8 @@ async def test_zeroconf_discovery():
     server = await asyncio.start_server(dummy_handler, "0.0.0.0", 0)
     port = server.sockets[0].getsockname()[1]
 
-    advertiser = ZeroconfAdvertiser(grpc_port=port)
+    test_service_type = "_testorch._tcp.local."
+    advertiser = ZeroconfAdvertiser(grpc_port=port, service_type=test_service_type)
     await advertiser.async_start()
 
     try:
@@ -28,7 +29,7 @@ async def test_zeroconf_discovery():
         await asyncio.sleep(1.0)
 
         # Run the discovery client
-        url = await discover_orchestrator(timeout=5.0)
+        url = await discover_orchestrator(timeout=5.0, service_type=test_service_type)
 
         assert url is not None, "Discovery failed to find the orchestrator"
         assert url.endswith(f":{port}"), f"URL does not end with port {port}: {url}"

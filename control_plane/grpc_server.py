@@ -4,11 +4,11 @@ import socket
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
-from control_plane.scheduler import FIFOScheduler
+from control_plane.scheduler import HardwareAwareScheduler
 
 
 class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
-    def __init__(self, db_session_factory, scheduler: FIFOScheduler):
+    def __init__(self, db_session_factory, scheduler: HardwareAwareScheduler):
         self.db_session_factory = db_session_factory
         self.scheduler = scheduler
 
@@ -136,12 +136,15 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             json.dump(workers, f, indent=2)
 
     async def SendHeartbeat(self, request, context):
+        from datetime import datetime, timezone
+
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:
                 node.cpu_utilization_percent = request.cpu_utilization_percent
                 node.ram_utilization_percent = request.ram_utilization_percent
                 node.ram_available_mb = request.ram_available_mb
+                node.last_heartbeat = datetime.now(timezone.utc)
 
                 # Update per-GPU telemetry
                 for gpu_info in request.gpus:
@@ -183,11 +186,11 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
         return orchestrator_pb2.HeartbeatResponse(acknowledged=True)
 
     async def RequestJob(self, request, context):
-        job_id = await self.scheduler.get_next_job()
-        if not job_id:
-            return orchestrator_pb2.JobRequest(job_id="")
-
         with self.db_session_factory() as db:
+            job_id = await self.scheduler.get_next_job_for_node(request.node_id, db)
+            if not job_id:
+                return orchestrator_pb2.JobRequest(job_id="")
+
             job = db.query(Job).filter(Job.job_id == job_id).first()
             if job:
                 job.assigned_node_id = request.node_id

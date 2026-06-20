@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from control_plane.grpc_server import OrchestratorService
 from control_plane.proto import orchestrator_pb2
-from control_plane.database.models import Node
+from control_plane.database.models import Node, Job
 from control_plane.main import SessionLocal
 
 
@@ -130,3 +130,81 @@ async def test_register_node_local_host_ip(clean_db, mock_scheduler, targets_fil
     assert len(data) == 1
     # It must be mapped!
     assert data[0]["targets"] == ["host.docker.internal:9101"]
+
+
+@pytest.mark.asyncio
+async def test_request_job(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    mock_context = MagicMock()
+
+    # Setup mock scheduler behavior
+    async def mock_get_job(*args, **kwargs):
+        return "job-123"
+
+    mock_scheduler.get_next_job_for_node = mock_get_job
+
+    with clean_db() as db:
+        job = Job(job_id="job-123", workload_type="test", status="PENDING")
+        db.add(job)
+        db.commit()
+
+    req = orchestrator_pb2.JobRequestPlaceholder(node_id="test-node")
+    resp = await service.RequestJob(req, mock_context)
+
+    assert resp.job_id == "job-123"
+    assert resp.workload_type == "test"
+
+    with clean_db() as db:
+        job = db.query(Job).filter(Job.job_id == "job-123").first()
+        assert job.status == "RUNNING"
+        assert job.assigned_node_id == "test-node"
+
+
+@pytest.mark.asyncio
+async def test_request_job_no_job(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    mock_context = MagicMock()
+
+    async def mock_get_no_job(*args, **kwargs):
+        return None
+
+    mock_scheduler.get_next_job_for_node = mock_get_no_job
+
+    req = orchestrator_pb2.JobRequestPlaceholder(node_id="test-node")
+    resp = await service.RequestJob(req, mock_context)
+
+    assert resp.job_id == ""
+
+
+@pytest.mark.asyncio
+async def test_send_heartbeat_updates_last_heartbeat(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    mock_context = MagicMock()
+
+    from datetime import datetime, timezone, timedelta
+
+    old_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    with clean_db() as db:
+        node = Node(node_id="hb-test", hostname="host", last_heartbeat=old_time)
+        db.add(node)
+        db.commit()
+
+    req = orchestrator_pb2.HeartbeatRequest(
+        node_id="hb-test",
+        cpu_utilization_percent=50.0,
+        ram_utilization_percent=50.0,
+        ram_available_mb=1000,
+        gpus=[],
+    )
+    resp = await service.SendHeartbeat(req, mock_context)
+    assert resp.acknowledged is True
+
+    with clean_db() as db:
+        node = db.query(Node).filter(Node.node_id == "hb-test").first()
+        hb = (
+            node.last_heartbeat.replace(tzinfo=timezone.utc)
+            if node.last_heartbeat.tzinfo is None
+            else node.last_heartbeat
+        )
+        assert hb > old_time

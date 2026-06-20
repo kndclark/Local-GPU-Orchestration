@@ -252,6 +252,52 @@
         { "expr": "worker_gpu_clock_core_mhz{node_id=\"$node_id\"}", "legendFormat": "Core — GPU {{ gpu_index }}", "refId": "A" },
         { "expr": "worker_gpu_clock_memory_mhz{node_id=\"$node_id\"}", "legendFormat": "Memory — GPU {{ gpu_index }}", "refId": "B" }
       ]
+    },
+    {
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "DS_JSON" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "id": 16,
+      "options": { "showHeader": true },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "job_id": 0,
+              "workload_type": 1,
+              "status": 2,
+              "created_at": 3,
+              "updated_at": 4
+            },
+            "renameByName": {
+              "job_id": "Job ID",
+              "workload_type": "Workload",
+              "status": "Status",
+              "created_at": "Created At",
+              "updated_at": "Updated At"
+            }
+          }
+        }
+      ],
+      "title": "Completed / Failed Jobs Log",
+      "type": "table",
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://host.docker.internal:8080/api/v1/nodes/${node_id}/jobs",
+          "format": "table",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          }
+        }
+      ]
     }
   ],
   "schemaVersion": 39,
