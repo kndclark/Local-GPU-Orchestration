@@ -120,9 +120,14 @@ def get_local_subnet_ips() -> list[str]:
 
 
 async def check_orchestrator(
-    test_ip: str, grpc_port: int = 50051, api_port: int = 8080
+    test_ip: str,
+    grpc_port: int = 50051,
+    api_port: int = 8080,
+    sem: asyncio.Semaphore | None = None,
 ) -> str | None:
     """Attempts to connect to gRPC port, then verifies via HTTP API."""
+    if sem:
+        await sem.acquire()
     try:
         # Step 1: Fast TCP check on the gRPC port
         reader, writer = await asyncio.wait_for(
@@ -145,20 +150,27 @@ async def check_orchestrator(
         if b"200 OK" in response:
             return f"{test_ip}:{grpc_port}"
 
-    except Exception:
-        pass
+    except (OSError, asyncio.TimeoutError):
+        pass  # nosec B110
+    except Exception as e:
+        logger.debug(f"Unexpected error checking {test_ip}: {e}")
+    finally:
+        if sem:
+            sem.release()
     return None
 
 
 async def run_subnet_scanner(
-    timeout: float = 5.0, grpc_port: int = 50051
+    timeout: float = 5.0, grpc_port: int = 50051, concurrency_limit: int = 50
 ) -> str | None:
     ips = get_local_subnet_ips()
     if not ips:
         return None
 
+    sem = asyncio.Semaphore(concurrency_limit)
     tasks = [
-        asyncio.create_task(check_orchestrator(ip, grpc_port=grpc_port)) for ip in ips
+        asyncio.create_task(check_orchestrator(ip, grpc_port=grpc_port, sem=sem))
+        for ip in ips
     ]
 
     start_time = asyncio.get_event_loop().time()
@@ -176,7 +188,7 @@ async def run_subnet_scanner(
                         p.cancel()
                     return result
             except Exception:
-                pass
+                pass  # nosec B110
         tasks = list(pending)
 
     # Timeout reached, cancel remaining
