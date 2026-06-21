@@ -280,9 +280,7 @@ async def delete_node(node_id: str, db: Session = Depends(get_db)):
     # Jobs have no delete cascade configured, so remove them explicitly.
     # GPUs are removed automatically via the delete-orphan cascade on the
     # Node.gpus relationship when the node is deleted.
-    deleted_jobs = (
-        db.query(Job).filter(Job.assigned_node_id == node_id).delete()
-    )
+    deleted_jobs = db.query(Job).filter(Job.assigned_node_id == node_id).delete()
     db.delete(node)
     db.commit()
 
