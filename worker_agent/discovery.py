@@ -1,6 +1,8 @@
 import logging
 import socket
 import asyncio
+import ipaddress
+import psutil
 from zeroconf import ServiceStateChange
 from zeroconf.asyncio import AsyncZeroconf, AsyncServiceBrowser
 
@@ -90,9 +92,94 @@ class OrchestratorListener:
                     "but none of its IPs were reachable."
                 )
 
+def get_local_subnet_ips() -> list[str]:
+    ips_to_scan = set()
+    try:
+        for interface, snics in psutil.net_if_addrs().items():
+            for snic in snics:
+                if snic.family == socket.AF_INET:
+                    ip = snic.address
+                    netmask = snic.netmask
+                    if ip == "127.0.0.1" or not netmask:
+                        continue
+                    
+                    try:
+                        network = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
+                        # Clamp to /24 to avoid massive scans (e.g. on corporate /8 networks)
+                        if network.prefixlen < 24:
+                            network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+                        
+                        for host in network.hosts():
+                            ips_to_scan.add(str(host))
+                    except ValueError:
+                        continue
+    except Exception as e:
+        logger.warning(f"Failed to enumerate local subnets: {e}")
+        
+    return list(ips_to_scan)
+
+async def check_orchestrator(test_ip: str, grpc_port: int = 50051, api_port: int = 8080) -> str | None:
+    """Attempts to connect to gRPC port, then verifies via HTTP API."""
+    try:
+        # Step 1: Fast TCP check on the gRPC port
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(test_ip, grpc_port), timeout=0.5
+        )
+        writer.close()
+        await writer.wait_closed()
+        
+        # Step 2: If gRPC port is open, verify it's our orchestrator via HTTP API
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(test_ip, api_port), timeout=1.0
+        )
+        request = f"GET /api/v1/nodes HTTP/1.0\r\nHost: {test_ip}\r\n\r\n"
+        writer.write(request.encode())
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(1024), timeout=1.0)
+        writer.close()
+        await writer.wait_closed()
+        
+        if b"200 OK" in response:
+            return f"{test_ip}:{grpc_port}"
+            
+    except Exception:
+        pass
+    return None
+
+async def run_subnet_scanner(timeout: float = 5.0, grpc_port: int = 50051) -> str | None:
+    ips = get_local_subnet_ips()
+    if not ips:
+        return None
+        
+    tasks = [asyncio.create_task(check_orchestrator(ip, grpc_port=grpc_port)) for ip in ips]
+    
+    start_time = asyncio.get_event_loop().time()
+    
+    while tasks and (asyncio.get_event_loop().time() - start_time) < timeout:
+        done, pending = await asyncio.wait(
+            tasks, return_when=asyncio.FIRST_COMPLETED, timeout=0.5
+        )
+        for task in done:
+            try:
+                result = task.result()
+                if result:
+                    # Cancel all remaining tasks
+                    for p in pending:
+                        p.cancel()
+                    return result
+            except Exception:
+                pass
+        tasks = list(pending)
+        
+    # Timeout reached, cancel remaining
+    for task in tasks:
+        task.cancel()
+        
+    return None
+
 
 async def discover_orchestrator(
-    timeout: float = 5.0, service_type: str = "_gpuorch._tcp.local."
+    timeout: float = 5.0, service_type: str = "_gpuorch._tcp.local.", grpc_port: int = 50051
 ) -> str | None:
     """
     Finds the Control Plane on the local network using mDNS (Zeroconf).
@@ -116,18 +203,28 @@ async def discover_orchestrator(
     import time
 
     start_time = time.time()
+    scanner_task = asyncio.create_task(run_subnet_scanner(timeout, grpc_port))
 
     try:
         # Poll the listener until a service is found or timeout is reached
         while time.time() - start_time < timeout:
             if listener.found_url:
+                scanner_task.cancel()
                 return listener.found_url
+                
+            if scanner_task.done():
+                result = scanner_task.result()
+                if result:
+                    logger.info(f"Auto-discovery successful! Found reachable orchestrator at {result} via subnet scanning")
+                    return result
+
             await asyncio.sleep(0.1)
 
         logger.warning(f"Auto-discovery timed out after {timeout} seconds.")
     except Exception as e:
         logger.error(f"Auto-discovery failed: {e}")
     finally:
+        scanner_task.cancel()
         await browser.async_cancel()
         await zeroconf.async_close()
 
