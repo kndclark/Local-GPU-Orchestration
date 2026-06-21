@@ -225,9 +225,7 @@ async def discover_orchestrator(
             if scanner_task.done():
                 result = scanner_task.result()
                 if result:
-                    logger.info(
-                        f"Found reachable orchestrator at {result}"
-                    )
+                    logger.info(f"Found reachable orchestrator at {result}")
                     return result
 
             await asyncio.sleep(0.1)
