@@ -65,7 +65,8 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             db.commit()
 
         # Extract peer IP and auto-register with Prometheus
-        peer = context.peer()
+        import urllib.parse
+        peer = urllib.parse.unquote(context.peer())
         ip = None
         if peer.startswith("ipv4:"):
             ip = peer.split(":")[1]
