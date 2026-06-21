@@ -106,7 +106,6 @@ def get_local_subnet_ips() -> list[str]:
 
                     try:
                         network = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
-                        # Clamp to /24 to avoid massive scans (e.g. on corporate /8 networks)
                         if network.prefixlen < 24:
                             network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
 
@@ -227,7 +226,7 @@ async def discover_orchestrator(
                 result = scanner_task.result()
                 if result:
                     logger.info(
-                        f"Auto-discovery successful! Found reachable orchestrator at {result} via subnet scanning"
+                        f"Found reachable orchestrator at {result}"
                     )
                     return result
 
