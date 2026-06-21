@@ -9,38 +9,38 @@ on:
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e .[dev,test]
-        
+
     - name: Compile Protobufs
-      run: |
-        python scripts/compile_protos.py
-        
-    - name: Start Control Plane
-      run: |
-        python -m control_plane.main &
-        timeout 30 bash -c 'until curl -s http://localhost:8080/api/v1/nodes; do sleep 1; done'
-        
-    - name: Start Monitoring Stack (Grafana & Prometheus)
-      run: |
-        docker compose -f docker-compose.monitoring.yml up -d
-        timeout 60 bash -c 'until curl -s http://localhost:3000/api/health; do sleep 2; done'
-        sleep 5
-        
+      run: python scripts/compile_protos.py
+
+    - name: Start full stack
+      run: docker compose up -d --build
+
+    - name: Wait for Control Plane
+      run: timeout 60 bash -c 'until curl -sf http://localhost:8080/api/v1/nodes; do sleep 2; done'
+
+    - name: Wait for Grafana
+      run: timeout 60 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 2; done'
+
     - name: Run Integration Tests
       env:
         INTEGRATION_TESTS: "true"
-      run: |
-        pytest -v
+      run: pytest -v
+
+    - name: Dump logs on failure
+      if: failure()
+      run: docker compose logs

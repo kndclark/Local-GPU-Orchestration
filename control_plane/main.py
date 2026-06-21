@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 import asyncio
+import os
 import uuid
 import json
 from sqlalchemy import create_engine
@@ -16,11 +17,10 @@ import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
 from control_plane.grpc_server import OrchestratorService
 
-# Use a persistent SQLite database so registered nodes survive restarts
-engine = create_engine(
-    "sqlite:///orchestrator.db",
-    connect_args={"check_same_thread": False},
-)
+# Use a persistent database; override via DATABASE_URL env var in Docker
+_db_url = os.environ.get("DATABASE_URL", "sqlite:///orchestrator.db")
+_connect_args = {"check_same_thread": False} if _db_url.startswith("sqlite") else {}
+engine = create_engine(_db_url, connect_args=_connect_args)
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -269,6 +269,24 @@ async def get_node(node_id: str, db: Session = Depends(get_db)):
         supported_workloads=node.supported_workloads,
         gpus=[_gpu_to_response(g) for g in node.gpus],
     )
+
+
+@app.delete("/api/v1/nodes/{node_id}")
+async def delete_node(node_id: str, db: Session = Depends(get_db)):
+    node = db.query(Node).filter(Node.node_id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # Jobs have no delete cascade configured, so remove them explicitly.
+    # GPUs are removed automatically via the delete-orphan cascade on the
+    # Node.gpus relationship when the node is deleted.
+    deleted_jobs = (
+        db.query(Job).filter(Job.assigned_node_id == node_id).delete()
+    )
+    db.delete(node)
+    db.commit()
+
+    return {"node_id": node_id, "deleted": True, "deleted_jobs": deleted_jobs}
 
 
 @app.get("/api/v1/nodes/{node_id}/jobs", response_model=list[JobResponse])

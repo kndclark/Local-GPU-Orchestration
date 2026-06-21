@@ -162,3 +162,52 @@ def test_get_node_not_found():
     response = client.get("/api/v1/nodes/nonexistent-node")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+# ──────────────────────────────────────────────
+# Node deletion tests
+# ──────────────────────────────────────────────
+
+
+def test_delete_node_cascades_gpus_and_jobs():
+    from control_plane.database.models import Job
+
+    with SessionLocal() as db:
+        db.query(Job).delete()
+        db.query(Gpu).delete()
+        db.query(Node).delete()
+
+        node = Node(node_id="del-node", hostname="to-delete", os="linux")
+        db.add(node)
+        db.flush()
+        db.add(Gpu(node_id="del-node", gpu_index=0, vendor="NVIDIA"))
+        db.add(
+            Job(
+                job_id="del-job",
+                workload_type="python",
+                status="COMPLETED",
+                assigned_node_id="del-node",
+            )
+        )
+        db.commit()
+
+    response = client.delete("/api/v1/nodes/del-node")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deleted"] is True
+    assert body["deleted_jobs"] == 1
+
+    # Node, its GPUs, and its jobs should all be gone
+    with SessionLocal() as db:
+        assert db.query(Node).filter(Node.node_id == "del-node").first() is None
+        assert db.query(Gpu).filter(Gpu.node_id == "del-node").count() == 0
+        assert db.query(Job).filter(Job.job_id == "del-job").first() is None
+
+    # Endpoint should now 404
+    assert client.get("/api/v1/nodes/del-node").status_code == 404
+
+
+def test_delete_node_not_found():
+    response = client.delete("/api/v1/nodes/nonexistent-node")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()

@@ -4,7 +4,7 @@ from worker_agent.executor import JobExecutor
 
 
 @pytest.mark.asyncio
-async def test_execute_job_success():
+async def test_execute_job_success(stub_ffmpeg):
     executor = JobExecutor()
 
     with patch("asyncio.create_subprocess_exec") as mock_exec:
@@ -30,7 +30,7 @@ async def test_execute_job_success():
 
 
 @pytest.mark.asyncio
-async def test_execute_job_failure():
+async def test_execute_job_failure(stub_ffmpeg):
     executor = JobExecutor()
 
     with patch("asyncio.create_subprocess_exec") as mock_exec:
@@ -48,7 +48,7 @@ async def test_execute_job_failure():
 
 
 @pytest.mark.asyncio
-async def test_execute_job_exception():
+async def test_execute_job_exception(stub_ffmpeg):
     executor = JobExecutor()
 
     with patch(
@@ -61,3 +61,18 @@ async def test_execute_job_exception():
 
         assert success is False
         assert "ffmpeg not found" in err
+
+
+@pytest.mark.asyncio
+async def test_execute_job_missing_executable():
+    executor = JobExecutor()
+
+    success, err = await executor.execute_job(
+        job_id="job-4",
+        executable="not-a-real-executable-xyzzy",
+        args=[],
+        env_vars={},
+    )
+
+    assert success is False
+    assert "not found on PATH" in err
