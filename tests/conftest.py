@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from control_plane.database.models import Base
 import control_plane.main
+import control_plane.grpc_server
 
 # Setup in-memory DB
 engine = create_engine(
@@ -24,6 +25,16 @@ def setup_test_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_targets_json(tmp_path, monkeypatch):
+    """Prevent every test from writing to the live monitoring/targets.json."""
+    monkeypatch.setattr(
+        control_plane.grpc_server,
+        "Path",
+        lambda _p: tmp_path / "targets.json",
+    )
 
 
 @pytest.fixture(autouse=True)
