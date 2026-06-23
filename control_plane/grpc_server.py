@@ -7,6 +7,25 @@ from control_plane.database.models import Node, Gpu, Job
 from control_plane.scheduler import HardwareAwareScheduler
 
 
+def _get_docker_gateway() -> str | None:
+    """Return the Docker bridge gateway IP by reading the container's routing table.
+
+    On bridge-networked Docker containers (both Windows and Linux hosts), the
+    host machine's native processes appear as the default gateway IP rather than
+    a local IP address. This detects that case so the worker can be registered
+    under host.docker.internal instead of the unreachable gateway IP.
+    """
+    try:
+        with open("/proc/net/route") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) > 2 and parts[1] == "00000000":
+                    return socket.inet_ntoa(bytes.fromhex(parts[2])[::-1])
+    except (OSError, IndexError, ValueError):
+        pass  # nosec B110
+    return None
+
+
 class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
     def __init__(self, db_session_factory, scheduler: HardwareAwareScheduler):
         self.db_session_factory = db_session_factory
@@ -65,7 +84,9 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             db.commit()
 
         # Extract peer IP and auto-register with Prometheus
-        peer = context.peer()
+        import urllib.parse
+
+        peer = urllib.parse.unquote(context.peer())
         ip = None
         if peer.startswith("ipv4:"):
             ip = peer.split(":")[1]
@@ -84,6 +105,11 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                         is_local = True
                 except Exception:
                     pass  # nosec B110
+
+            # On Docker bridge networks the host's native worker appears as the
+            # bridge gateway IP (e.g. 172.19.0.1), not a local IP.
+            if not is_local and ip == _get_docker_gateway():
+                is_local = True
 
             if is_local:
                 # Prometheus runs in docker, so it needs host.docker.internal

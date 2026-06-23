@@ -24,11 +24,9 @@ def mock_scheduler():
 
 @pytest.fixture
 def targets_file(tmp_path):
-    # Override the targets.json path for testing
-    file_path = tmp_path / "targets.json"
-    with patch("control_plane.grpc_server.Path") as mock_path:
-        mock_path.return_value = file_path
-        yield file_path
+    # The global _isolate_targets_json fixture in conftest.py already redirects
+    # Path to tmp_path / "targets.json" for every test; just return that path.
+    return tmp_path / "targets.json"
 
 
 @pytest.mark.asyncio
@@ -130,6 +128,69 @@ async def test_register_node_local_host_ip(clean_db, mock_scheduler, targets_fil
     assert len(data) == 1
     # It must be mapped!
     assert data[0]["targets"] == ["host.docker.internal:9101"]
+
+
+@pytest.mark.asyncio
+async def test_register_node_docker_gateway(clean_db, mock_scheduler, targets_file):
+    """Test that the Docker bridge gateway IP is mapped to host.docker.internal.
+
+    On bridge-networked Docker containers, connections from the host's native
+    worker appear as the default gateway IP (e.g. 172.19.0.1). This test
+    verifies that IP is correctly translated to host.docker.internal so
+    Prometheus can scrape the co-located worker.
+    """
+    service = OrchestratorService(clean_db, mock_scheduler)
+
+    mock_context = MagicMock()
+    mock_context.peer.return_value = "ipv4:172.19.0.1:54321"
+
+    req = orchestrator_pb2.RegisterNodeRequest(
+        node_id="test-node-gateway", hostname="test-host"
+    )
+
+    with patch(
+        "socket.gethostbyname_ex", return_value=("container", [], ["172.19.0.2"])
+    ):
+        with patch(
+            "control_plane.grpc_server._get_docker_gateway", return_value="172.19.0.1"
+        ):
+            resp = await service.RegisterNode(req, mock_context)
+
+    assert resp.success is True
+    data = json.loads(targets_file.read_text())
+    assert len(data) == 1
+    assert data[0]["targets"] == ["host.docker.internal:9101"]
+
+
+@pytest.mark.asyncio
+async def test_register_node_docker_gateway_no_match(
+    clean_db, mock_scheduler, targets_file
+):
+    """
+    Test that a non-gateway remote IP is not incorrectly mapped
+    when gateway detection runs.
+    """
+    service = OrchestratorService(clean_db, mock_scheduler)
+
+    mock_context = MagicMock()
+    mock_context.peer.return_value = "ipv4:192.168.1.100:54321"
+
+    req = orchestrator_pb2.RegisterNodeRequest(
+        node_id="test-node-remote2", hostname="remote-host"
+    )
+
+    with patch(
+        "socket.gethostbyname_ex", return_value=("container", [], ["172.19.0.2"])
+    ):
+        with patch(
+            "control_plane.grpc_server._get_docker_gateway", return_value="172.19.0.1"
+        ):
+            resp = await service.RegisterNode(req, mock_context)
+
+    assert resp.success is True
+    data = json.loads(targets_file.read_text())
+    assert len(data) == 1
+    assert data[0]["targets"] == ["192.168.1.100:9101"]
 
 
 @pytest.mark.asyncio

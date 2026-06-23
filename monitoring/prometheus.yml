@@ -10,10 +10,12 @@ global:
 
 scrape_configs:
   # ── Control Plane ────────────────────────
+  # Uses the Docker Compose service name when running the full stack.
+  # Change to host.docker.internal:8080 if running Prometheus standalone.
   - job_name: "control_plane"
     metrics_path: "/metrics/"
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["control-plane:8080"]
         labels:
           component: "control_plane"
 

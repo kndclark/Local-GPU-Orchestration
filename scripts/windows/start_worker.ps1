@@ -9,9 +9,12 @@ Set-Location -Path "$ScriptDir\..\.."
 
 
 
+. "$PSScriptRoot\common.ps1"
+
 # Run the agent module using the venv if it exists
 if (Test-Path ".venv\Scripts\python.exe") {
     & ".venv\Scripts\python.exe" -m worker_agent.main
 } else {
-    python -m worker_agent.main
+    $Python = Find-Python
+    & $Python -m worker_agent.main
 }

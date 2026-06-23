@@ -1,0 +1,69 @@
+# GPU Orchestrator — Full Stack
+#
+# Usage:
+#   docker compose up -d --build
+#
+# Runs the Control Plane (API + gRPC), Prometheus, and Grafana together.
+# Worker agents still run natively on each machine (hardware access required).
+
+services:
+  control-plane:
+    build: .
+    container_name: gpu-orch-control-plane
+    ports:
+      - "8080:8080"   # REST API + Prometheus metrics
+      - "50051:50051" # gRPC (worker agents connect here)
+    environment:
+      - DATABASE_URL=sqlite:////app/data/orchestrator.db
+    volumes:
+      - cp-data:/app/data
+      - ./monitoring:/app/monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/nodes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gpu-orch-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/targets.json:/etc/prometheus/targets.json:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gpu-orch-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  cp-data:
+  prometheus-data:
+  grafana-data:

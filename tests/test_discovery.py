@@ -29,7 +29,9 @@ async def test_zeroconf_discovery():
         await asyncio.sleep(1.0)
 
         # Run the discovery client
-        url = await discover_orchestrator(timeout=5.0, service_type=test_service_type)
+        url = await discover_orchestrator(
+            timeout=5.0, service_type=test_service_type, grpc_port=port
+        )
 
         assert url is not None, "Discovery failed to find the orchestrator"
         assert url.endswith(f":{port}"), f"URL does not end with port {port}: {url}"
