@@ -66,6 +66,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
         # Extract peer IP and auto-register with Prometheus
         import urllib.parse
+
         peer = urllib.parse.unquote(context.peer())
         ip = None
         if peer.startswith("ipv4:"):
@@ -84,6 +85,27 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                     if ip in local_ips:
                         is_local = True
                 except Exception:
+                    pass  # nosec B110
+
+            # On Docker-for-Windows, connections from the host appear as the
+            # Docker bridge gateway (e.g. 172.19.0.1), not a local IP.
+            # Detect this by reading the container's default route.
+            if not is_local:
+                try:
+                    with open("/proc/net/route") as f:
+                        for line in f:
+                            parts = line.split()
+                            if (
+                                parts[1] == "00000000"
+                            ):  # destination 0.0.0.0 = default route
+                                gateway_hex = parts[2]
+                                gateway_ip = socket.inet_ntoa(
+                                    bytes.fromhex(gateway_hex)[::-1]
+                                )
+                                if ip == gateway_ip:
+                                    is_local = True
+                                break
+                except (OSError, IndexError, ValueError):
                     pass  # nosec B110
 
             if is_local:
