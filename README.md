@@ -19,8 +19,32 @@ The worker agent's HAL automatically detects and normalizes telemetry for:
 
 ## Deployment & Setup
 
-### Quick Start (One-Click Install & Run)
-The fastest way to deploy a worker agent to a new machine is to clone the repo and run the unified startup script. It will auto-detect your hardware, create a virtual environment, install the correct dependencies (e.g. NVIDIA libraries), prompt you for the Control Plane URL, and then immediately start the agent.
+### Step 1 — Start the Control Plane (on the host machine)
+
+The control plane, Prometheus, and Grafana all run together in a single Docker Compose stack:
+
+```bash
+docker compose up -d --build
+```
+
+Or via the Makefile shortcut:
+
+```bash
+make up
+```
+
+This starts:
+- **Control Plane** (REST API + gRPC) at ports `8080` / `50051`
+- **Prometheus** at [http://localhost:9090](http://localhost:9090)
+- **Grafana** at [http://localhost:3000](http://localhost:3000) — pre-provisioned dashboards (login: `admin`/`admin`)
+
+> The control plane host can also run a worker agent alongside Docker — just run the worker startup script as described in Step 2.
+
+---
+
+### Step 2 — Start Worker Agents (on each worker machine)
+
+Clone the repo on the worker machine and run the unified startup script. It auto-detects hardware, creates a virtual environment, installs the correct dependencies (including NVIDIA libraries if present), and immediately starts the agent.
 
 **On Linux (Steam Deck, ROG Ally X):**
 ```bash
@@ -31,71 +55,44 @@ chmod +x run.sh
 ```
 
 **On Windows (Desktop):**
-Open PowerShell and run:
 ```powershell
 git clone https://github.com/kndclark/Local-GPU-Orchestration.git
 cd Local-GPU-Orchestration
 powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-*(Note: If the auto-detection fails to find your NVIDIA GPU, you can pass a flag to force the installation of NVIDIA telemetry tools: `./run.sh --force-nvidia` or `.\run.ps1 -ForceNvidia`)*
+*(Pass `--force-nvidia` / `-ForceNvidia` if your NVIDIA GPU wasn't auto-detected.)*
+
+**No manual configuration required.** The worker agent automatically:
+1. Scans the local subnet to discover the control plane — no `ORCHESTRATOR_URL` needed
+2. Registers itself via gRPC, which adds its Prometheus metrics endpoint to the scrape list automatically
+3. Begins sending hardware telemetry heartbeats and polling for jobs
+
+Prometheus picks up the new worker within one scrape interval (~15s). No editing of config files required.
 
 ---
 
 ### Manual Setup
-If you prefer to run the setup and start steps separately:
-
-#### 1. Clone the repository
-```bash
-git clone https://github.com/kndclark/Local-GPU-Orchestration.git
-cd Local-GPU-Orchestration
-```
-
-### 2. Run the Setup Script
-The interactive setup script will auto-detect your operating system, configure a Python virtual environment, install the correct dependencies (including NVIDIA libraries if an NVIDIA GPU is detected), and configure your environment variables.
-
-**On Linux (Steam Deck, ROG Ally X):**
-```bash
-chmod +x scripts/setup.sh
-./scripts/linux/setup.sh
-```
-
-**On Windows (Desktop):**
-Open PowerShell and run:
-```powershell
-.\scripts\windows\setup.ps1
-```
-
-*(Note: You can pass `--force-nvidia` or `-ForceNvidia` to these scripts if your NVIDIA GPU wasn't automatically detected, or manually install via `pip install -e .[nvidia]` in the `.venv`).*
-
-### 3. Start the Worker Agent
-Once setup is complete, run the start script to launch the daemon:
+If you prefer to run setup and start as separate steps:
 
 **On Linux:**
 ```bash
+chmod +x scripts/linux/setup.sh
+./scripts/linux/setup.sh
 ./scripts/linux/start_worker.sh
 ```
 
 **On Windows:**
 ```powershell
+.\scripts\windows\setup.ps1
 .\scripts\windows\start_worker.ps1
 ```
 
-The agent will automatically register with the control plane and begin sending hardware telemetry and polling for jobs.
+---
 
-## Monitoring (Prometheus + Grafana)
+## Monitoring
 
-The orchestrator exposes Prometheus metrics from both the **Control Plane** (port 8080) and **Worker Agents** (port 9101). A pre-configured Docker Compose stack is provided for visualization.
-
-### Start the Monitoring Stack
-
-```bash
-docker-compose -f docker-compose.monitoring.yml up -d
-```
-
-This starts:
-- **Prometheus** at [http://localhost:9090](http://localhost:9090) — scrapes the control plane and worker agents every 15s
-- **Grafana** at [http://localhost:3000](http://localhost:3000) — pre-provisioned with two dashboards (login: `admin`/`admin`)
+The orchestrator exposes Prometheus metrics from both the **Control Plane** (port 8080) and **Worker Agents** (port 9101).
 
 ### Dashboards
 
@@ -103,17 +100,6 @@ This starts:
 |-----------|-------------|
 | **Cluster Overview** | Node count, total GPUs, VRAM, GPU vendor breakdown, jobs by status, per-node CPU/RAM, GPU temperature, VRAM, power, utilization |
 | **Node Detail** | Drill-down by `node_id` — system stats, per-GPU temperature, utilization, VRAM, power, fan speed, clock speeds |
-
-### Adding Worker Targets
-
-Edit `monitoring/prometheus.yml` to add additional worker agent targets:
-
-```yaml
-- targets: ["<worker-ip>:9101"]
-  labels:
-    component: "worker_agent"
-    machine: "<machine-name>"
-```
 
 ### Metrics Ports
 
