@@ -49,6 +49,15 @@ class MockSysfsReader:
         """Return a list of mock card paths."""
         return [f"/sys/class/drm/card{i}/device" for i in range(len(self.cards))]
 
+    def hwmon_dirs(self, device_path):
+        """Return hwmon directories for the given device path."""
+        for i, card in enumerate(self.cards):
+            base = f"/sys/class/drm/card{i}/device"
+            if device_path == base:
+                idx = card.get("hwmon_index", 0)
+                return [f"{base}/hwmon/hwmon{idx}"]
+        return []
+
     def read_file(self, path):
         """Simulate reading a sysfs file."""
         for i, card in enumerate(self.cards):
@@ -64,8 +73,8 @@ class MockSysfsReader:
             if path == f"{base}/gpu_busy_percent":
                 return str(card.get("gpu_busy", 0))
 
-            # hwmon paths
-            hwmon = f"{base}/hwmon/hwmon0"
+            # hwmon paths — index is configurable per card (default 0)
+            hwmon = f"{base}/hwmon/hwmon{card.get('hwmon_index', 0)}"
             if path == f"{hwmon}/temp1_input":
                 return str(card.get("temp", 0))
             if path == f"{hwmon}/power1_average":
@@ -260,6 +269,26 @@ class TestAmdSysfsTelemetry:
 # ──────────────────────────────────────────────
 # Steam Deck APU specific test
 # ──────────────────────────────────────────────
+
+
+class TestHighHwmonIndex:
+    """hwmon dirs with system-wide indices above 9 (e.g. hwmon11 on ROG Ally X)."""
+
+    @pytest.mark.parametrize(
+        "hwmon_index",
+        [10, 11, 15],
+        ids=["hwmon10", "hwmon11-rog-ally-x", "hwmon15"],
+    )
+    def test_telemetry_found_at_high_hwmon_index(self, hwmon_index):
+        cards = _make_sysfs_tree()
+        cards[0]["hwmon_index"] = hwmon_index
+        mock_reader = MockSysfsReader(cards)
+        backend = AmdSysfsBackend(_reader=mock_reader)
+        backend.is_available()
+
+        telem = backend.read_telemetry(0)
+        assert telem.temperature_c == 55.0
+        assert telem.power_draw_w == pytest.approx(15.0, abs=0.01)
 
 
 class TestSteamDeckScenario:

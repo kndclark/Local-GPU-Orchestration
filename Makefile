@@ -9,7 +9,7 @@ COMPOSE := docker compose
 SERVICE := control-plane
 
 .DEFAULT_GOAL := help
-.PHONY: help up build restart down stop logs join shell ps clean
+.PHONY: help up build restart down stop logs join shell ps clean metrics-reset
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -44,3 +44,11 @@ ps: ## Show status of stack containers
 
 clean: ## Stop the stack and remove containers, volumes, and built images
 	$(COMPOSE) down -v --rmi local
+
+metrics-reset: ## Wipe Prometheus history only (clean dashboard slate; keeps DB + Grafana)
+	@echo "Resetting Prometheus TSDB (control-plane DB and Grafana dashboards are preserved)..."
+	$(COMPOSE) rm -sf prometheus
+	-docker volume rm $$(docker volume ls -q -f "label=com.docker.compose.volume=prometheus-data")
+	$(COMPOSE) up -d prometheus
+	@echo "Done. Active workers will re-populate from targets.json within ~30s."
+	@echo "(To save history before wiping in future, see the deferred 'metrics-snapshot' plan.)"
