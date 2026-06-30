@@ -57,6 +57,43 @@ async def test_register_node_success():
     assert req.gpus[0].total_vram_mb == 24576
 
 
+@pytest.mark.parametrize(
+    "metrics_ip, metrics_port, colocated",
+    [
+        ("192.168.0.55", 9101, False),  # remote worker advertises its LAN IP
+        ("", 9101, True),  # colocated worker (non-default bool)
+        ("", 0, False),  # metrics disabled
+    ],
+)
+@pytest.mark.asyncio
+async def test_register_node_transmits_advertise_fields(
+    metrics_ip, metrics_port, colocated
+):
+    """The self-advertised Prometheus scrape fields are transmitted in the proto."""
+    client = WorkerClient(node_id="node-1")
+    client.connect()
+
+    mock_resp = MagicMock()
+    mock_resp.success = True
+    mock_stub = AsyncMock()
+    mock_stub.RegisterNode.return_value = mock_resp
+    client.stub = mock_stub
+
+    await client.register_node(
+        hostname="test-host",
+        gpus=[],
+        supported_workloads=[],
+        metrics_ip=metrics_ip,
+        metrics_port=metrics_port,
+        colocated=colocated,
+    )
+
+    req = mock_stub.RegisterNode.call_args[0][0]
+    assert req.metrics_ip == metrics_ip
+    assert req.metrics_port == metrics_port
+    assert req.colocated is colocated
+
+
 @pytest.mark.asyncio
 async def test_register_node_network_failure():
     client = WorkerClient(node_id="node-1")

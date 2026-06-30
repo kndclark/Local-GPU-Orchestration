@@ -1,29 +1,65 @@
 import json
 import logging
-import socket
+from datetime import datetime, timezone
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
+from control_plane.metrics import STALE_NODE_SECONDS
 from control_plane.scheduler import HardwareAwareScheduler
 
 
-def _get_docker_gateway() -> str | None:
-    """Return the Docker bridge gateway IP by reading the container's routing table.
+def compute_active_machines(db, now: datetime | None = None) -> set[str]:
+    """Return the hostnames of nodes that are currently active (live).
 
-    On bridge-networked Docker containers (both Windows and Linux hosts), the
-    host machine's native processes appear as the default gateway IP rather than
-    a local IP address. This detects that case so the worker can be registered
-    under host.docker.internal instead of the unreachable gateway IP.
+    A node is active if it registered or sent a heartbeat within
+    ``STALE_NODE_SECONDS``. ``now`` is injectable for deterministic testing.
     """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    active: set[str] = set()
+    for node in db.query(Node).all():
+        hb = node.last_heartbeat
+        if hb is None:
+            continue
+        if hb.tzinfo is None:
+            hb = hb.replace(tzinfo=timezone.utc)
+        if (now - hb).total_seconds() < STALE_NODE_SECONDS:
+            active.add(node.hostname)
+    return active
+
+
+def reconcile_prometheus_targets(
+    active_machines, targets_path: str = "monitoring/targets.json"
+) -> int:
+    """Remove Prometheus scrape targets for workers that are no longer active.
+
+    A target is kept only if its ``machine`` label matches the hostname of a
+    currently-active node (one that has sent a heartbeat within the stale
+    window). This stops Prometheus from scraping dead workers, so their stale
+    series drop off the dashboards instead of accumulating.
+
+    Args:
+        active_machines: Hostnames (machine labels) of currently-active nodes.
+        targets_path: Path to the Prometheus file_sd targets file.
+
+    Returns:
+        The number of target entries removed.
+    """
+    targets_file = Path(targets_path)
+    if not targets_file.exists():
+        return 0
     try:
-        with open("/proc/net/route") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) > 2 and parts[1] == "00000000":
-                    return socket.inet_ntoa(bytes.fromhex(parts[2])[::-1])
-    except (OSError, IndexError, ValueError):
-        pass  # nosec B110
-    return None
+        with open(targets_file, "r") as f:
+            workers = json.load(f)
+    except (OSError, ValueError):
+        return 0
+
+    kept = [w for w in workers if w.get("labels", {}).get("machine") in active_machines]
+    removed = len(workers) - len(kept)
+    if removed:
+        with open(targets_file, "w") as f:
+            json.dump(kept, f, indent=2)
+    return removed
 
 
 class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
@@ -45,6 +81,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             node.cpu_model = request.cpu_model
             node.total_ram_mb = request.total_ram_mb
             node.supported_workloads = ",".join(request.supported_workloads)
+            node.last_heartbeat = datetime.now(timezone.utc)
 
             # Upsert GPU records
             # Delete existing GPUs for this node, then re-create
@@ -83,41 +120,24 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
             db.commit()
 
-        # Extract peer IP and auto-register with Prometheus
-        import urllib.parse
+        # Register the worker's self-advertised metrics endpoint with Prometheus.
+        # The worker tells us where it can be scraped because we can't infer it
+        # from the gRPC peer behind a Docker Desktop port proxy (every external
+        # peer appears as the bridge gateway).
+        if request.colocated:
+            # Worker shares the host with the (Dockerized) control plane;
+            # Prometheus must reach it via host.docker.internal, not a LAN IP.
+            metrics_ip = "host.docker.internal"
+        else:
+            metrics_ip = request.metrics_ip
 
-        peer = urllib.parse.unquote(context.peer())
-        ip = None
-        if peer.startswith("ipv4:"):
-            ip = peer.split(":")[1]
-        elif peer.startswith("ipv6:"):
-            ip = peer.split("]:")[0].replace("ipv6:[", "")
+        metrics_port = request.metrics_port or 9101
 
-        if ip:
-            # Check if this IP is actually one of the host's own local IPs
-            is_local = False
-            if ip in ("127.0.0.1", "::1", "localhost"):
-                is_local = True
-            else:
-                try:
-                    local_ips = socket.gethostbyname_ex(socket.gethostname())[2]
-                    if ip in local_ips:
-                        is_local = True
-                except Exception:
-                    pass  # nosec B110
-
-            # On Docker bridge networks the host's native worker appears as the
-            # bridge gateway IP (e.g. 172.19.0.1), not a local IP.
-            if not is_local and ip == _get_docker_gateway():
-                is_local = True
-
-            if is_local:
-                # Prometheus runs in docker, so it needs host.docker.internal
-                # to reach the worker running on the host machine.
-                ip = "host.docker.internal"
-
+        if metrics_ip:
             try:
-                self._update_prometheus_targets(ip, request.hostname)
+                self._update_prometheus_targets(
+                    metrics_ip, request.hostname, port=metrics_port
+                )
             except Exception as e:
                 logging.getLogger(__name__).error(
                     "Failed to update prometheus targets: %s", e
@@ -162,8 +182,6 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             json.dump(workers, f, indent=2)
 
     async def SendHeartbeat(self, request, context):
-        from datetime import datetime, timezone
-
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:

@@ -20,9 +20,13 @@ scrape_configs:
           component: "control_plane"
 
   # ── Worker Agents ────────────────────────
-  # Targets are loaded dynamically from targets.json
-  # Run `configure.ps1` or `configure.sh` to add workers.
+  # Targets are loaded dynamically from targets.json, which the control plane
+  # rewrites whenever a worker registers (no manual configuration needed).
+  #
+  # refresh_interval forces Prometheus to periodically re-read the file. This
+  # is required on Docker Desktop (Windows/Mac)
   - job_name: "worker_agent"
     file_sd_configs:
       - files:
         - "/etc/prometheus/targets.json"
+        refresh_interval: 30s

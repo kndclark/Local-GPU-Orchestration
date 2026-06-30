@@ -121,3 +121,47 @@ def test_ip_scoring():
         "169.254.1.1",
         "127.0.0.1",
     ]
+
+
+@pytest.mark.parametrize(
+    "orchestrator_url, interfaces, expected_ip, expected_colocated",
+    [
+        # Control plane on this same machine (localhost) -> colocated.
+        ("localhost:50051", [("192.168.0.93", "255.255.255.0")], "", True),
+        ("127.0.0.1:50051", [("192.168.0.93", "255.255.255.0")], "", True),
+        # Orchestrator IP is one of our own interfaces -> colocated.
+        (
+            "192.168.0.93:50051",
+            [("192.168.0.93", "255.255.255.0")],
+            "",
+            True,
+        ),
+        # Remote control plane on the same subnet -> advertise our LAN IP.
+        (
+            "192.168.0.190:50051",
+            [("192.168.0.93", "255.255.255.0")],
+            "192.168.0.93",
+            False,
+        ),
+        # Remote control plane, no matching subnet -> fall back to best-scored IP.
+        (
+            "10.5.5.5:50051",
+            [("169.254.1.1", "255.255.0.0"), ("192.168.0.93", "255.255.255.0")],
+            "192.168.0.93",
+            False,
+        ),
+    ],
+)
+def test_resolve_advertise_address(
+    orchestrator_url, interfaces, expected_ip, expected_colocated
+):
+    """Worker advertises correct scrape address: local vs remote control plane."""
+    from worker_agent.discovery import resolve_advertise_address
+
+    with patch(
+        "worker_agent.discovery.get_local_ipv4_interfaces", return_value=interfaces
+    ):
+        metrics_ip, colocated = resolve_advertise_address(orchestrator_url)
+
+    assert metrics_ip == expected_ip
+    assert colocated is expected_colocated
