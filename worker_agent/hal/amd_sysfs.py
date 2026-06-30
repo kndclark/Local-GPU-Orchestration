@@ -33,6 +33,9 @@ class _RealSysfsReader:
         cards = sorted(glob.glob("/sys/class/drm/card[0-9]*/device"))
         return cards
 
+    def hwmon_dirs(self, device_path):
+        return sorted(glob.glob(f"{device_path}/hwmon/hwmon*"))
+
     def read_file(self, path):
         try:
             with open(path, "r") as f:
@@ -45,14 +48,14 @@ class _RealSysfsReader:
 
 
 def _find_hwmon(device_path, reader):
-    """Find the first hwmon directory under a device path."""
-    # Try hwmon0 through hwmon9
-    for i in range(10):
-        candidate = f"{device_path}/hwmon/hwmon{i}"
-        if (
-            reader.exists(f"{candidate}/temp1_input")
-            or reader.read_file(f"{candidate}/temp1_input") is not None
-        ):
+    """Find the first hwmon directory under a device path.
+
+    Uses reader.hwmon_dirs() to enumerate actual entries — avoids a hardcoded
+    upper bound that would miss high system-wide indices (e.g. hwmon11 on
+    ROG Ally X where other platform devices claim hwmon0-hwmon10).
+    """
+    for candidate in reader.hwmon_dirs(device_path):
+        if reader.exists(f"{candidate}/temp1_input"):
             return candidate
     return None
 
