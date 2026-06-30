@@ -155,7 +155,7 @@ def test_ip_scoring():
 def test_resolve_advertise_address(
     orchestrator_url, interfaces, expected_ip, expected_colocated
 ):
-    """Verify the worker advertises the correct scrape address for local vs remote control planes."""
+    """Worker advertises correct scrape address: local vs remote control plane."""
     from worker_agent.discovery import resolve_advertise_address
 
     with patch(

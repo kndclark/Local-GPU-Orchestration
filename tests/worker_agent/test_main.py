@@ -110,7 +110,7 @@ async def test_agent_daemon_metrics_wiring(
     resolve_called,
     http_called,
 ):
-    """The daemon resolves its scrape address (when metrics are on) and forwards it to register_node."""
+    """Daemon wires the resolved scrape address into registration."""
     settings = WorkerSettings(
         orchestrator_url=orch_url,
         node_id="wiring-node",

@@ -1,9 +1,65 @@
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
+from control_plane.metrics import STALE_NODE_SECONDS
 from control_plane.scheduler import HardwareAwareScheduler
+
+
+def compute_active_machines(db, now: datetime | None = None) -> set[str]:
+    """Return the hostnames of nodes that are currently active (live).
+
+    A node is active if it registered or sent a heartbeat within
+    ``STALE_NODE_SECONDS``. ``now`` is injectable for deterministic testing.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    active: set[str] = set()
+    for node in db.query(Node).all():
+        hb = node.last_heartbeat
+        if hb is None:
+            continue
+        if hb.tzinfo is None:
+            hb = hb.replace(tzinfo=timezone.utc)
+        if (now - hb).total_seconds() < STALE_NODE_SECONDS:
+            active.add(node.hostname)
+    return active
+
+
+def reconcile_prometheus_targets(
+    active_machines, targets_path: str = "monitoring/targets.json"
+) -> int:
+    """Remove Prometheus scrape targets for workers that are no longer active.
+
+    A target is kept only if its ``machine`` label matches the hostname of a
+    currently-active node (one that has sent a heartbeat within the stale
+    window). This stops Prometheus from scraping dead workers, so their stale
+    series drop off the dashboards instead of accumulating.
+
+    Args:
+        active_machines: Hostnames (machine labels) of currently-active nodes.
+        targets_path: Path to the Prometheus file_sd targets file.
+
+    Returns:
+        The number of target entries removed.
+    """
+    targets_file = Path(targets_path)
+    if not targets_file.exists():
+        return 0
+    try:
+        with open(targets_file, "r") as f:
+            workers = json.load(f)
+    except (OSError, ValueError):
+        return 0
+
+    kept = [w for w in workers if w.get("labels", {}).get("machine") in active_machines]
+    removed = len(workers) - len(kept)
+    if removed:
+        with open(targets_file, "w") as f:
+            json.dump(kept, f, indent=2)
+    return removed
 
 
 class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
@@ -25,6 +81,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             node.cpu_model = request.cpu_model
             node.total_ram_mb = request.total_ram_mb
             node.supported_workloads = ",".join(request.supported_workloads)
+            node.last_heartbeat = datetime.now(timezone.utc)
 
             # Upsert GPU records
             # Delete existing GPUs for this node, then re-create
@@ -125,8 +182,6 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
             json.dump(workers, f, indent=2)
 
     async def SendHeartbeat(self, request, context):
-        from datetime import datetime, timezone
-
         with self.db_session_factory() as db:
             node = db.query(Node).filter(Node.node_id == request.node_id).first()
             if node:

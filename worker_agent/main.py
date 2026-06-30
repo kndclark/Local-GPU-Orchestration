@@ -85,7 +85,9 @@ class AgentDaemon:
             cpu_model=platform.processor(),
             total_ram_mb=0,  # Handled in heartbeats via hw_manager
             metrics_ip=metrics_ip,
-            metrics_port=self.settings.metrics_port if self.settings.metrics_enabled else 0,
+            metrics_port=(
+                self.settings.metrics_port if self.settings.metrics_enabled else 0
+            ),
             colocated=colocated,
         )
         if not success:

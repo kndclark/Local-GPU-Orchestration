@@ -11,11 +11,15 @@ from prometheus_client import CollectorRegistry, make_asgi_app
 
 from control_plane.database.models import Base, Job, Node, Gpu
 from control_plane.scheduler import HardwareAwareScheduler
-from control_plane.metrics import ControlPlaneMetrics
+from control_plane.metrics import ControlPlaneMetrics, STALE_NODE_SECONDS
 from contextlib import asynccontextmanager
 import grpc.aio
 from control_plane.proto import orchestrator_pb2_grpc
-from control_plane.grpc_server import OrchestratorService
+from control_plane.grpc_server import (
+    OrchestratorService,
+    reconcile_prometheus_targets,
+    compute_active_machines,
+)
 
 # Use a persistent database; override via DATABASE_URL env var in Docker
 _db_url = os.environ.get("DATABASE_URL", "sqlite:///orchestrator.db")
@@ -55,11 +59,24 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(15)
 
+    # Prune Prometheus scrape targets for workers that have gone stale, so
+    # their series drop off the dashboards instead of accumulating.
+    async def _targets_reconcile_loop():
+        while True:
+            try:
+                with SessionLocal() as db:
+                    reconcile_prometheus_targets(compute_active_machines(db))
+            except Exception:  # nosec B110
+                pass
+            await asyncio.sleep(STALE_NODE_SECONDS // 2)
+
     metrics_task = asyncio.create_task(_metrics_refresh_loop())
+    reconcile_task = asyncio.create_task(_targets_reconcile_loop())
 
     yield
 
     metrics_task.cancel()
+    reconcile_task.cancel()
     await advertiser.async_stop()
     await server.stop(0)
 

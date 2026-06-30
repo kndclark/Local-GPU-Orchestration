@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 
 from control_plane.database.models import Node, Job
 
+# A node is considered active (live) if it has sent a heartbeat within this
+# window. Used both for dashboard metrics and for pruning stale Prometheus
+# scrape targets.
+STALE_NODE_SECONDS = 60
+
 
 class ControlPlaneMetrics:
     """Manages Prometheus gauges for cluster-wide telemetry.
@@ -104,7 +109,7 @@ class ControlPlaneMetrics:
                 hb = node.last_heartbeat
                 if hb.tzinfo is None:
                     hb = hb.replace(tzinfo=timezone.utc)
-                if (now - hb).total_seconds() < 60:
+                if (now - hb).total_seconds() < STALE_NODE_SECONDS:
                     active_nodes.append(node)
 
         self.nodes_total.set(len(active_nodes))
