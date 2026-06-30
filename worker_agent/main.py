@@ -64,7 +64,17 @@ class AgentDaemon:
 
         self.client.connect()
 
-        # 4. Register node
+        # 4. Determine how Prometheus should reach this worker, then register.
+        # The control plane can't infer our address from the gRPC peer when it
+        # sits behind a Docker Desktop port proxy, so we advertise it ourselves.
+        from worker_agent.discovery import resolve_advertise_address
+
+        metrics_ip, colocated = ("", False)
+        if self.settings.metrics_enabled:
+            metrics_ip, colocated = resolve_advertise_address(
+                self.client.server_address
+            )
+
         success = await self.client.register_node(
             hostname=platform.node(),
             gpus=self._gpu_devices,
@@ -74,6 +84,9 @@ class AgentDaemon:
             cpu_count=0,  # Could grab from psutil if needed at registration time
             cpu_model=platform.processor(),
             total_ram_mb=0,  # Handled in heartbeats via hw_manager
+            metrics_ip=metrics_ip,
+            metrics_port=self.settings.metrics_port if self.settings.metrics_enabled else 0,
+            colocated=colocated,
         )
         if not success:
             logger.error("Failed to register with orchestrator. Exiting.")

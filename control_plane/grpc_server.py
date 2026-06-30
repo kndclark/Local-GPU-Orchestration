@@ -1,29 +1,9 @@
 import json
 import logging
-import socket
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
 from control_plane.database.models import Node, Gpu, Job
 from control_plane.scheduler import HardwareAwareScheduler
-
-
-def _get_docker_gateway() -> str | None:
-    """Return the Docker bridge gateway IP by reading the container's routing table.
-
-    On bridge-networked Docker containers (both Windows and Linux hosts), the
-    host machine's native processes appear as the default gateway IP rather than
-    a local IP address. This detects that case so the worker can be registered
-    under host.docker.internal instead of the unreachable gateway IP.
-    """
-    try:
-        with open("/proc/net/route") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) > 2 and parts[1] == "00000000":
-                    return socket.inet_ntoa(bytes.fromhex(parts[2])[::-1])
-    except (OSError, IndexError, ValueError):
-        pass  # nosec B110
-    return None
 
 
 class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
@@ -83,41 +63,24 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
 
             db.commit()
 
-        # Extract peer IP and auto-register with Prometheus
-        import urllib.parse
+        # Register the worker's self-advertised metrics endpoint with Prometheus.
+        # The worker tells us where it can be scraped because we can't infer it
+        # from the gRPC peer behind a Docker Desktop port proxy (every external
+        # peer appears as the bridge gateway).
+        if request.colocated:
+            # Worker shares the host with the (Dockerized) control plane;
+            # Prometheus must reach it via host.docker.internal, not a LAN IP.
+            metrics_ip = "host.docker.internal"
+        else:
+            metrics_ip = request.metrics_ip
 
-        peer = urllib.parse.unquote(context.peer())
-        ip = None
-        if peer.startswith("ipv4:"):
-            ip = peer.split(":")[1]
-        elif peer.startswith("ipv6:"):
-            ip = peer.split("]:")[0].replace("ipv6:[", "")
+        metrics_port = request.metrics_port or 9101
 
-        if ip:
-            # Check if this IP is actually one of the host's own local IPs
-            is_local = False
-            if ip in ("127.0.0.1", "::1", "localhost"):
-                is_local = True
-            else:
-                try:
-                    local_ips = socket.gethostbyname_ex(socket.gethostname())[2]
-                    if ip in local_ips:
-                        is_local = True
-                except Exception:
-                    pass  # nosec B110
-
-            # On Docker bridge networks the host's native worker appears as the
-            # bridge gateway IP (e.g. 172.19.0.1), not a local IP.
-            if not is_local and ip == _get_docker_gateway():
-                is_local = True
-
-            if is_local:
-                # Prometheus runs in docker, so it needs host.docker.internal
-                # to reach the worker running on the host machine.
-                ip = "host.docker.internal"
-
+        if metrics_ip:
             try:
-                self._update_prometheus_targets(ip, request.hostname)
+                self._update_prometheus_targets(
+                    metrics_ip, request.hostname, port=metrics_port
+                )
             except Exception as e:
                 logging.getLogger(__name__).error(
                     "Failed to update prometheus targets: %s", e

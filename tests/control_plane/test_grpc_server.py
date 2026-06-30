@@ -56,141 +56,50 @@ async def test_update_prometheus_targets(clean_db, mock_scheduler, targets_file)
     assert data[0]["labels"]["machine"] == "WorkerOne-Updated"
 
 
+@pytest.mark.parametrize(
+    "metrics_ip, metrics_port, colocated, expected_target",
+    [
+        # Remote worker: self-advertised LAN IP written verbatim.
+        ("192.168.0.55", 9101, False, "192.168.0.55:9101"),
+        # Custom metrics port is honored.
+        ("192.168.0.55", 9200, False, "192.168.0.55:9200"),
+        # Colocated worker is mapped to host.docker.internal.
+        ("", 9101, True, "host.docker.internal:9101"),
+        # Metrics disabled (no advertised address): no target written.
+        ("", 0, False, None),
+    ],
+)
 @pytest.mark.asyncio
-async def test_register_node_remote_ip(clean_db, mock_scheduler, targets_file):
-    """Test that a remote IP does not get mapped to host.docker.internal."""
+async def test_register_node_prometheus_target(
+    clean_db,
+    mock_scheduler,
+    targets_file,
+    metrics_ip,
+    metrics_port,
+    colocated,
+    expected_target,
+):
+    """The worker's self-advertised address determines the Prometheus scrape target."""
     service = OrchestratorService(clean_db, mock_scheduler)
-
     mock_context = MagicMock()
-    mock_context.peer.return_value = "ipv4:192.168.1.100:54321"
 
     req = orchestrator_pb2.RegisterNodeRequest(
-        node_id="test-node-remote", hostname="test-host", os="linux"
-    )
-
-    # Mock socket to ensure 192.168.1.100 is NOT considered a local IP
-    with patch("socket.gethostbyname_ex", return_value=("test", [], ["10.0.0.1"])):
-        resp = await service.RegisterNode(req, mock_context)
-
-    assert resp.success is True
-
-    # Verify targets.json
-    data = json.loads(targets_file.read_text())
-    assert len(data) == 1
-    assert data[0]["targets"] == ["192.168.1.100:9101"]
-
-
-@pytest.mark.asyncio
-async def test_register_node_localhost(clean_db, mock_scheduler, targets_file):
-    """Test that 127.0.0.1 is mapped to host.docker.internal."""
-    service = OrchestratorService(clean_db, mock_scheduler)
-
-    mock_context = MagicMock()
-    mock_context.peer.return_value = "ipv4:127.0.0.1:54321"
-
-    req = orchestrator_pb2.RegisterNodeRequest(
-        node_id="test-node-local", hostname="test-host"
+        node_id="reg-node",
+        hostname="reg-host",
+        metrics_ip=metrics_ip,
+        metrics_port=metrics_port,
+        colocated=colocated,
     )
 
     resp = await service.RegisterNode(req, mock_context)
     assert resp.success is True
 
-    data = json.loads(targets_file.read_text())
-    assert len(data) == 1
-    assert data[0]["targets"] == ["host.docker.internal:9101"]
-
-
-@pytest.mark.asyncio
-async def test_register_node_local_host_ip(clean_db, mock_scheduler, targets_file):
-    """
-    Test that an IP belonging to the host machine is mapped to host.docker.internal.
-    """
-    service = OrchestratorService(clean_db, mock_scheduler)
-
-    mock_context = MagicMock()
-    # E.g. worker connects via WSL virtual IP
-    mock_context.peer.return_value = "ipv4:192.168.64.1:54321"
-
-    req = orchestrator_pb2.RegisterNodeRequest(
-        node_id="test-node-host-ip", hostname="test-host"
-    )
-
-    # Mock socket to claim that 192.168.64.1 is one of the host's local IPs
-    with patch(
-        "socket.gethostbyname_ex",
-        return_value=("test-pc", [], ["192.168.0.50", "192.168.64.1"]),
-    ):
-        resp = await service.RegisterNode(req, mock_context)
-
-    assert resp.success is True
-
-    data = json.loads(targets_file.read_text())
-    assert len(data) == 1
-    # It must be mapped!
-    assert data[0]["targets"] == ["host.docker.internal:9101"]
-
-
-@pytest.mark.asyncio
-async def test_register_node_docker_gateway(clean_db, mock_scheduler, targets_file):
-    """Test that the Docker bridge gateway IP is mapped to host.docker.internal.
-
-    On bridge-networked Docker containers, connections from the host's native
-    worker appear as the default gateway IP (e.g. 172.19.0.1). This test
-    verifies that IP is correctly translated to host.docker.internal so
-    Prometheus can scrape the co-located worker.
-    """
-    service = OrchestratorService(clean_db, mock_scheduler)
-
-    mock_context = MagicMock()
-    mock_context.peer.return_value = "ipv4:172.19.0.1:54321"
-
-    req = orchestrator_pb2.RegisterNodeRequest(
-        node_id="test-node-gateway", hostname="test-host"
-    )
-
-    with patch(
-        "socket.gethostbyname_ex", return_value=("container", [], ["172.19.0.2"])
-    ):
-        with patch(
-            "control_plane.grpc_server._get_docker_gateway", return_value="172.19.0.1"
-        ):
-            resp = await service.RegisterNode(req, mock_context)
-
-    assert resp.success is True
-    data = json.loads(targets_file.read_text())
-    assert len(data) == 1
-    assert data[0]["targets"] == ["host.docker.internal:9101"]
-
-
-@pytest.mark.asyncio
-async def test_register_node_docker_gateway_no_match(
-    clean_db, mock_scheduler, targets_file
-):
-    """
-    Test that a non-gateway remote IP is not incorrectly mapped
-    when gateway detection runs.
-    """
-    service = OrchestratorService(clean_db, mock_scheduler)
-
-    mock_context = MagicMock()
-    mock_context.peer.return_value = "ipv4:192.168.1.100:54321"
-
-    req = orchestrator_pb2.RegisterNodeRequest(
-        node_id="test-node-remote2", hostname="remote-host"
-    )
-
-    with patch(
-        "socket.gethostbyname_ex", return_value=("container", [], ["172.19.0.2"])
-    ):
-        with patch(
-            "control_plane.grpc_server._get_docker_gateway", return_value="172.19.0.1"
-        ):
-            resp = await service.RegisterNode(req, mock_context)
-
-    assert resp.success is True
-    data = json.loads(targets_file.read_text())
-    assert len(data) == 1
-    assert data[0]["targets"] == ["192.168.1.100:9101"]
+    if expected_target is None:
+        assert not targets_file.exists()
+    else:
+        data = json.loads(targets_file.read_text())
+        assert len(data) == 1
+        assert data[0]["targets"] == [expected_target]
 
 
 @pytest.mark.asyncio

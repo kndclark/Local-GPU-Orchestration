@@ -68,6 +68,10 @@ message RegisterNodeRequest {
   int32 cpu_count = 5;
   string cpu_model = 6;
   int64 total_ram_mb = 7;
+  string metrics_ip = 8;
+  int32 metrics_port = 9;
+  bool colocated = 16; // true if worker shares the host with the control plane
+
   repeated GpuInfo gpus = 10;
   repeated string supported_workloads = 15;
 }

@@ -67,6 +67,9 @@ class WorkerClient:
         cpu_count: int = 0,
         cpu_model: str = "",
         total_ram_mb: int = 0,
+        metrics_ip: str = "",
+        metrics_port: int = 0,
+        colocated: bool = False,
     ) -> bool:
         if not self.stub:
             self.connect()
@@ -79,6 +82,9 @@ class WorkerClient:
             cpu_count=cpu_count,
             cpu_model=cpu_model,
             total_ram_mb=total_ram_mb,
+            metrics_ip=metrics_ip,
+            metrics_port=metrics_port,
+            colocated=colocated,
             gpus=[_gpu_device_to_proto(g) for g in gpus],
             supported_workloads=supported_workloads,
         )

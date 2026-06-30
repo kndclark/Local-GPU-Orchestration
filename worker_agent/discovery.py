@@ -93,6 +93,69 @@ class OrchestratorListener:
                 )
 
 
+def get_local_ipv4_interfaces() -> list[tuple[str, str]]:
+    """Return (ip, netmask) pairs for each non-loopback IPv4 interface."""
+    result = []
+    try:
+        for _interface, snics in psutil.net_if_addrs().items():
+            for snic in snics:
+                if (
+                    snic.family == socket.AF_INET
+                    and snic.address != "127.0.0.1"
+                    and snic.netmask
+                ):
+                    result.append((snic.address, snic.netmask))
+    except Exception as e:
+        logger.warning(f"Failed to enumerate local interfaces: {e}")
+    return result
+
+
+def resolve_advertise_address(orchestrator_url: str) -> tuple[str, bool]:
+    """Determine how Prometheus should reach this worker.
+
+    The control plane cannot reliably infer the worker's address from the gRPC
+    peer when it sits behind a Docker Desktop port proxy (every external peer
+    appears as the bridge gateway), so the worker advertises it explicitly.
+
+    Returns (metrics_ip, colocated):
+      - colocated=True when the control plane runs on this same machine (the
+        discovered orchestrator IP is localhost or one of our own IPs). The
+        control plane substitutes host.docker.internal in that case.
+      - otherwise metrics_ip is this worker's LAN IP on the orchestrator's
+        subnet (falling back to the best-scored local IP).
+    """
+    orch_host = (
+        orchestrator_url.rsplit(":", 1)[0]
+        if ":" in orchestrator_url
+        else orchestrator_url
+    )
+
+    interfaces = get_local_ipv4_interfaces()
+    local_ips = [ip for ip, _ in interfaces]
+
+    if orch_host in ("localhost", "127.0.0.1", "::1") or orch_host in local_ips:
+        return "", True
+
+    # Remote control plane: prefer the local IP whose subnet contains it.
+    try:
+        orch_ip = ipaddress.ip_address(orch_host)
+        for ip, netmask in interfaces:
+            try:
+                net = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
+                if orch_ip in net:
+                    return ip, False
+            except ValueError:
+                continue
+    except ValueError:
+        pass  # orch_host wasn't a plain IP (e.g. a hostname) — fall through
+
+    # Fallback: best-scored local IP (prefer 192.168/10/172 over link-local).
+    if local_ips:
+        local_ips.sort(key=score_ip, reverse=True)
+        return local_ips[0], False
+    return "", False
+
+
 def get_local_subnet_ips() -> list[str]:
     ips_to_scan = set()
     try:
