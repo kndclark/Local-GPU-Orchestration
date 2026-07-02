@@ -109,6 +109,8 @@ message JobRequest {
   string workload_type = 2;
   repeated string args = 3;
   map<string, string> env_vars = 4;
+  string ready_signal = 5;
+  int32 report_port = 6;
 }
 
 message JobResponse {
@@ -121,6 +123,7 @@ message JobStatusUpdate {
   string node_id = 2;
   string status = 3;
   string error_message = 4;
+  string endpoint = 5;  // Worker reports RPC address (host:port) when WORKER_READY
 }
 
 message JobStatusResponse {

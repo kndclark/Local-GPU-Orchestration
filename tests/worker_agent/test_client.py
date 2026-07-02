@@ -172,6 +172,80 @@ async def test_send_heartbeat_with_telemetry():
     assert list(req.active_job_ids) == ["job-1", "job-2"]
 
 
+# ──────────────────────────────────────────────
+# Job request tests
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_request_job_returns_gang_coordination_fields():
+    client = WorkerClient(node_id="node-1")
+    client.connect()
+
+    mock_resp = MagicMock()
+    mock_resp.job_id = "j1"
+    mock_resp.workload_type = "llama_rpc_server"
+    mock_resp.args = ["--host", "0.0.0.0", "--port", "50052"]
+    mock_resp.env_vars = {}
+    mock_resp.ready_signal = "listening"
+    mock_resp.report_port = 50052
+
+    mock_stub = AsyncMock()
+    mock_stub.RequestJob.return_value = mock_resp
+    client.stub = mock_stub
+
+    job = await client.request_job()
+
+    assert job["job_id"] == "j1"
+    assert job["args"] == ["--host", "0.0.0.0", "--port", "50052"]
+    assert job["ready_signal"] == "listening"
+    assert job["report_port"] == 50052
+
+
+# ──────────────────────────────────────────────
+# Job status update tests
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_transmits_endpoint():
+    client = WorkerClient(node_id="node-1")
+    client.connect()
+
+    mock_resp = MagicMock()
+    mock_resp.acknowledged = True
+    mock_stub = AsyncMock()
+    mock_stub.UpdateJobStatus.return_value = mock_resp
+    client.stub = mock_stub
+
+    ok = await client.update_job_status(
+        job_id="j1", status="WORKER_READY", endpoint="10.0.0.5:50052"
+    )
+
+    assert ok is True
+    req = mock_stub.UpdateJobStatus.call_args[0][0]
+    assert req.job_id == "j1"
+    assert req.status == "WORKER_READY"
+    assert req.endpoint == "10.0.0.5:50052"
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_endpoint_defaults_empty():
+    client = WorkerClient(node_id="node-1")
+    client.connect()
+
+    mock_resp = MagicMock()
+    mock_resp.acknowledged = True
+    mock_stub = AsyncMock()
+    mock_stub.UpdateJobStatus.return_value = mock_resp
+    client.stub = mock_stub
+
+    await client.update_job_status(job_id="j1", status="COMPLETED")
+
+    req = mock_stub.UpdateJobStatus.call_args[0][0]
+    assert req.endpoint == ""
+
+
 @pytest.mark.asyncio
 async def test_send_heartbeat_network_failure():
     client = WorkerClient(node_id="node-1")

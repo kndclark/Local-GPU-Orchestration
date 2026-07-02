@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import platform
+import socket
 import sys
 
 from prometheus_client import start_http_server
@@ -154,39 +155,60 @@ class AgentDaemon:
                 job = await self.client.request_job()
                 if job:
                     logger.info(f"Received job: {job['job_id']}")
-                    # For Phase 2, we execute jobs sequentially (blocking this loop).
-                    # A true production agent would dispatch to a background worker
-                    # pool.
-
-                    # Ensure we're using the right executable context
-                    executable = sys.executable
-                    if job["workload_type"] != "python":
-                        # If not python, the workload_type might be the executable
-                        # itself e.g., 'ffmpeg'
-                        executable = job["workload_type"]
-
-                    self.active_jobs.append(job["job_id"])
-                    try:
-                        success, error_msg = await self.executor.execute_job(
-                            job_id=job["job_id"],
-                            executable=executable,
-                            args=job["args"],
-                            env_vars=job["env_vars"],
-                        )
-                    finally:
-                        self.active_jobs.remove(job["job_id"])
-
-                    status = "COMPLETED" if success else "FAILED"
-                    await self.client.update_job_status(
-                        job_id=job["job_id"],
-                        status=status,
-                        error_message=error_msg,
-                    )
+                    status = await self._dispatch_job(job)
                     logger.info(f"Job {job['job_id']} finished with status {status}")
             except Exception as e:
                 logger.error(f"Error in job poll loop: {e}")
 
             await asyncio.sleep(self.settings.job_poll_interval_seconds)
+
+    async def _dispatch_job(self, job: dict) -> str:
+        """Run a single job (server or normal) and report its terminal status."""
+        self.active_jobs.append(job["job_id"])
+        try:
+            if job.get("ready_signal"):
+                success, error_msg = await self._execute_server_job(job)
+            else:
+                executable = sys.executable
+                if job["workload_type"] != "python":
+                    executable = job["workload_type"]
+                success, error_msg = await self.executor.execute_job(
+                    job_id=job["job_id"],
+                    executable=executable,
+                    args=job["args"],
+                    env_vars=job["env_vars"],
+                )
+        finally:
+            self.active_jobs.remove(job["job_id"])
+
+        status = "COMPLETED" if success else "FAILED"
+        await self.client.update_job_status(
+            job_id=job["job_id"], status=status, error_message=error_msg
+        )
+        return status
+
+    async def _execute_server_job(self, job: dict) -> tuple[bool, str]:
+        """Run a gang worker server, reporting WORKER_READY with our endpoint."""
+        endpoint = f"{self._resolve_gang_host()}:{job['report_port']}"
+
+        async def on_ready():
+            await self.client.update_job_status(
+                job_id=job["job_id"], status="WORKER_READY", endpoint=endpoint
+            )
+
+        return await self.executor.execute_server_job(
+            job_id=job["job_id"],
+            executable=job["workload_type"],
+            args=job["args"],
+            env_vars=job["env_vars"],
+            ready_signal=job["ready_signal"],
+            on_ready=on_ready,
+        )
+
+    def _resolve_gang_host(self) -> str:
+        if self.settings.gang_advertise_host:
+            return self.settings.gang_advertise_host
+        return socket.gethostbyname(socket.gethostname())
 
 
 async def _main():
