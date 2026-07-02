@@ -50,5 +50,5 @@ metrics-reset: ## Wipe Prometheus history only (clean dashboard slate; keeps DB 
 	$(COMPOSE) rm -sf prometheus
 	-docker volume rm $$(docker volume ls -q -f "label=com.docker.compose.volume=prometheus-data")
 	$(COMPOSE) up -d prometheus
-	@echo "Done. Active workers will re-populate from targets.json within ~30s."
+	@echo "Done. Active workers will re-populate from targets/*.json within ~30s."
 	@echo "(To save history before wiping in future, see the deferred 'metrics-snapshot' plan.)"

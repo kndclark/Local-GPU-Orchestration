@@ -33,7 +33,7 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/targets.json:/etc/prometheus/targets.json:ro
+      - ./monitoring/targets:/etc/prometheus/targets:ro
       - prometheus-data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -20,13 +20,16 @@ scrape_configs:
           component: "control_plane"
 
   # ── Worker Agents ────────────────────────
-  # Targets are loaded dynamically from targets.json, which the control plane
+  # Targets are loaded dynamically from targets/*.json, which the control plane
   # rewrites whenever a worker registers (no manual configuration needed).
   #
-  # refresh_interval forces Prometheus to periodically re-read the file. This
+  # A directory glob is used (not a single file) because Docker turns a missing
+  # single-file bind mount into a root-owned directory on a fresh host.
+  #
+  # refresh_interval forces Prometheus to periodically re-read the files. This
   # is required on Docker Desktop (Windows/Mac)
   - job_name: "worker_agent"
     file_sd_configs:
       - files:
-        - "/etc/prometheus/targets.json"
+        - "/etc/prometheus/targets/*.json"
         refresh_interval: 30s
