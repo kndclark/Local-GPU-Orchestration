@@ -11,7 +11,7 @@ from collections import Counter
 from prometheus_client import CollectorRegistry, Gauge, REGISTRY
 from sqlalchemy.orm import Session
 
-from control_plane.database.models import Node, Job
+from control_plane.database.models import Node, Job, GangJob
 
 # A node is considered active (live) if it has sent a heartbeat within this
 # window. Used both for dashboard metrics and for pruning stale Prometheus
@@ -61,6 +61,12 @@ class ControlPlaneMetrics:
         self.jobs_total = Gauge(
             "cluster_jobs_total",
             "Number of jobs by status",
+            ["status"],
+            registry=self._registry,
+        )
+        self.gang_jobs_total = Gauge(
+            "cluster_gang_jobs_total",
+            "Number of gang jobs by status",
             ["status"],
             registry=self._registry,
         )
@@ -160,3 +166,11 @@ class ControlPlaneMetrics:
         status_counts: Counter = Counter(j.status for j in jobs)
         for status in ["PENDING", "RUNNING", "COMPLETED", "FAILED"]:
             self.jobs_total.labels(status=status).set(status_counts.get(status, 0))
+
+        # ── Gang jobs ─────────────────────────
+        gang_jobs = db.query(GangJob).all()
+        gang_status_counts: Counter = Counter(g.status for g in gang_jobs)
+        for status in ["FORMING", "RUNNING", "COMPLETED", "FAILED"]:
+            self.gang_jobs_total.labels(status=status).set(
+                gang_status_counts.get(status, 0)
+            )

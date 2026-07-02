@@ -144,6 +144,82 @@ async def test_agent_daemon_metrics_wiring(
     assert kwargs["colocated"] is expected_colocated
 
 
+def _make_daemon(settings):
+    with (
+        patch("worker_agent.main.WorkerClient"),
+        patch("worker_agent.main.HardwareManager"),
+        patch("worker_agent.main.JobExecutor"),
+        patch("worker_agent.main.WorkerMetrics"),
+    ):
+        daemon = AgentDaemon(settings=settings)
+    daemon.client = AsyncMock()
+    daemon.executor = AsyncMock()
+    return daemon
+
+
+@pytest.mark.asyncio
+async def test_dispatch_server_job_reports_ready_and_completes():
+    settings = WorkerSettings(
+        orchestrator_url="localhost:50051",
+        node_id="gang-node",
+        gang_advertise_host="192.168.1.77",
+        metrics_enabled=False,
+    )
+    daemon = _make_daemon(settings)
+
+    async def fake_server_job(*, on_ready, **kwargs):
+        await on_ready()
+        return True, ""
+
+    daemon.executor.execute_server_job.side_effect = fake_server_job
+
+    job = {
+        "job_id": "wjob-1",
+        "workload_type": "llama_rpc_server",
+        "args": ["--host", "0.0.0.0", "--port", "50052"],
+        "env_vars": {},
+        "ready_signal": "listening",
+        "report_port": 50052,
+    }
+
+    status = await daemon._dispatch_job(job)
+
+    assert status == "COMPLETED"
+    daemon.executor.execute_job.assert_not_called()
+    daemon.client.update_job_status.assert_any_await(
+        job_id="wjob-1", status="WORKER_READY", endpoint="192.168.1.77:50052"
+    )
+    daemon.client.update_job_status.assert_any_await(
+        job_id="wjob-1", status="COMPLETED", error_message=""
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_normal_job_uses_execute_job():
+    settings = WorkerSettings(
+        orchestrator_url="localhost:50051",
+        node_id="n",
+        metrics_enabled=False,
+    )
+    daemon = _make_daemon(settings)
+    daemon.executor.execute_job.return_value = (True, "")
+
+    job = {
+        "job_id": "j2",
+        "workload_type": "ffmpeg",
+        "args": [],
+        "env_vars": {},
+        "ready_signal": "",
+        "report_port": 0,
+    }
+
+    status = await daemon._dispatch_job(job)
+
+    assert status == "COMPLETED"
+    daemon.executor.execute_job.assert_awaited_once()
+    daemon.executor.execute_server_job.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_agent_daemon_lifecycle(mock_settings):
     # Mock all external dependencies

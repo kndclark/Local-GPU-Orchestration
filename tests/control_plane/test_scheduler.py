@@ -126,3 +126,39 @@ async def test_scheduler_initialize_from_db(db):
 
     job_id = await scheduler.get_next_job_for_node("test-node", db)
     assert job_id == "pending-1"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_respects_node_pinning(db):
+    """A job pre-pinned via assigned_node_id must only dispatch to that node."""
+    scheduler = HardwareAwareScheduler()
+
+    for node_id in ("node-a", "node-b"):
+        db.add(Node(node_id=node_id, hostname=node_id))
+        db.add(
+            Gpu(
+                node_id=node_id,
+                gpu_index=0,
+                vendor="NVIDIA",
+                temperature_c=50.0,
+                temperature_hotspot_c=50.0,
+            )
+        )
+
+    # Pinned to node-b specifically (as gang worker jobs are).
+    pinned = Job(
+        job_id="pinned-b",
+        workload_type="llama_rpc_server",
+        requires_cuda=False,
+        status="PENDING",
+        assigned_node_id="node-b",
+    )
+    db.add(pinned)
+    db.commit()
+
+    await scheduler.submit_job("pinned-b")
+
+    # node-a asks first but must NOT receive the job pinned to node-b.
+    assert await scheduler.get_next_job_for_node("node-a", db) is None
+    # node-b receives its pinned job.
+    assert await scheduler.get_next_job_for_node("node-b", db) == "pinned-b"

@@ -79,7 +79,14 @@ This document outlines the architecture and phased implementation plan for a dis
 *   Implement **Thermal-Aware Routing**: The Scheduler reads thermal data and routes jobs away from nodes nearing their thermal limits.
 
 ### Phase 5: Distributed Co-Scheduling (VRAM Pooling for LLMs)
-*   Implement **Gang Scheduling**: Deploy `llama-rpc-server` to a subset of worker nodes whose combined VRAM meets the requirement, and deploy the `llama-cli` master process to a head node.
+*   Implement **Gang Scheduling**: Deploy `llama-rpc-server` to a subset of worker nodes whose combined VRAM meets the requirement, and deploy the `llama-cli` controller process to a head node.
+*   See `PHASE5_IMPLEMENTATION_PLAN.md` for the detailed design (workload-agnostic gang framework, two-phase dispatch, worker/controller roles).
+
+### Phase 5.5: Resource Lifecycle & Garbage Collection
+*   Reap orphaned gang workers when a controller crashes or disconnects unexpectedly.
+*   Time out and clean up gangs stuck in `FORMING` (workers that never report `WORKER_READY`).
+*   Force-terminate lingering `llama-rpc-server` processes that did not exit naturally.
+*   Add a cleanup/reaper loop in the control plane and a worker-side watchdog. (Deferred out of Phase 5, which relies on llama.cpp workers exiting naturally on controller disconnect.)
 
 ### Phase 6: Adaptive Scheduling (Historical Throughput Weighting)
 *   Implement a feedback loop where the scheduler records actual execution times for job types on specific nodes to calculate "effective throughput".

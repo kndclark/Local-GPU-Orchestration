@@ -97,3 +97,62 @@ class Job(Base):
     )
 
     node = relationship("Node", back_populates="jobs")
+
+
+class GangJob(Base):
+    """A distributed co-scheduled (gang) job pooling VRAM across nodes.
+
+    Workload-agnostic: `worker_workload_type` is dispatched to each selected
+    worker node, and once all workers report WORKER_READY the control plane
+    dispatches `controller_workload_type` to the controller node with the worker
+    endpoints injected into its args.
+    """
+
+    __tablename__ = "gang_jobs"
+
+    gang_job_id = Column(String, primary_key=True)
+    worker_workload_type = Column(String, nullable=False)
+    worker_args = Column(String, default="[]")  # JSON string
+    worker_ready_signal = Column(String, default="")
+    worker_port = Column(Integer, default=0)
+    controller_workload_type = Column(String, nullable=False)
+    controller_args = Column(String, default="[]")  # JSON string
+    controller_endpoints_flag = Column(String, default="--rpc")
+    min_vram_mb = Column(Integer, nullable=False)
+    requires_cuda = Column(Boolean, default=False)
+
+    # FORMING -> RUNNING -> COMPLETED | FAILED
+    status = Column(String, default="FORMING")
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    participants = relationship(
+        "GangJobParticipant",
+        back_populates="gang_job",
+        cascade="all, delete-orphan",
+    )
+
+
+class GangJobParticipant(Base):
+    """One node's role within a gang job.
+
+    `role` is "worker" or "controller". `job_id` links to the underlying Job
+    record (null for the controller until all workers are ready). `endpoint` is
+    populated when a worker reports WORKER_READY with its RPC address.
+    """
+
+    __tablename__ = "gang_job_participants"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gang_job_id = Column(String, ForeignKey("gang_jobs.gang_job_id"), nullable=False)
+    node_id = Column(String, ForeignKey("nodes.node_id"), nullable=False)
+    role = Column(String, nullable=False)  # "worker" | "controller"
+    job_id = Column(String, ForeignKey("jobs.job_id"), nullable=True)
+    endpoint = Column(String, nullable=True)  # "host:port" once WORKER_READY
+
+    gang_job = relationship("GangJob", back_populates="participants")

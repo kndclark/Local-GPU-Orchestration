@@ -62,6 +62,11 @@ class HardwareAwareScheduler:
                 self.pending_jobs.remove(job_id)
                 continue
 
+            # Respect node pinning: gang worker/controller jobs are pre-assigned
+            # to a specific node and must only dispatch there.
+            if job.assigned_node_id and job.assigned_node_id != node_id:
+                continue
+
             if job.requires_cuda and not has_nvidia:
                 continue
 

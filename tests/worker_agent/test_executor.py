@@ -1,6 +1,11 @@
+import sys
 import pytest
 from unittest.mock import AsyncMock, patch
 from worker_agent.executor import JobExecutor
+
+
+def _py(code):
+    return sys.executable, ["-c", code]
 
 
 @pytest.mark.asyncio
@@ -76,3 +81,72 @@ async def test_execute_job_missing_executable():
 
     assert success is False
     assert "not found on PATH" in err
+
+
+# ──────────────────────────────────────────────
+# Server (gang worker) execution tests
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_execute_server_job_fires_ready_then_completes():
+    executor = JobExecutor()
+    exe, args = _py(
+        "import sys; print('main: RPC server listening on 127.0.0.1:50052', "
+        "flush=True); sys.exit(0)"
+    )
+    on_ready = AsyncMock()
+
+    success, err = await executor.execute_server_job(
+        job_id="rpc-1",
+        executable=exe,
+        args=args,
+        env_vars={},
+        ready_signal="listening",
+        on_ready=on_ready,
+    )
+
+    assert success is True
+    assert err == ""
+    on_ready.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_server_job_failure_without_ready():
+    executor = JobExecutor()
+    exe, args = _py(
+        "import sys; print('error: failed to bind port', flush=True); sys.exit(1)"
+    )
+    on_ready = AsyncMock()
+
+    success, err = await executor.execute_server_job(
+        job_id="rpc-2",
+        executable=exe,
+        args=args,
+        env_vars={},
+        ready_signal="listening",
+        on_ready=on_ready,
+    )
+
+    assert success is False
+    assert "failed to bind" in err
+    on_ready.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_server_job_missing_executable():
+    executor = JobExecutor()
+    on_ready = AsyncMock()
+
+    success, err = await executor.execute_server_job(
+        job_id="rpc-3",
+        executable="not-a-real-executable-xyzzy",
+        args=[],
+        env_vars={},
+        ready_signal="listening",
+        on_ready=on_ready,
+    )
+
+    assert success is False
+    assert "not found on PATH" in err
+    on_ready.assert_not_awaited()

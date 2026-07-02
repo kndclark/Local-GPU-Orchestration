@@ -314,6 +314,51 @@
         { "expr": "worker_gpu_encoder_utilization_percent", "legendFormat": "Enc — {{ model }} ({{ node_id }})", "refId": "C" },
         { "expr": "worker_gpu_decoder_utilization_percent", "legendFormat": "Dec — {{ model }} ({{ node_id }})", "refId": "D" }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "id": 104,
+      "title": "Gang Jobs (VRAM Pooling)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 39 },
+      "id": 40,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "pieType": "donut", "tooltip": { "mode": "single" } },
+      "title": "Gang Jobs by Status",
+      "type": "piechart",
+      "targets": [
+        { "expr": "cluster_gang_jobs_total", "legendFormat": "{{ status }}", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": false },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 39 },
+      "id": 41,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "title": "Gang Jobs Over Time",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "cluster_gang_jobs_total{status=\"FORMING\"}", "legendFormat": "Forming", "refId": "A" },
+        { "expr": "cluster_gang_jobs_total{status=\"RUNNING\"}", "legendFormat": "Running", "refId": "B" },
+        { "expr": "cluster_gang_jobs_total{status=\"COMPLETED\"}", "legendFormat": "Completed", "refId": "C" },
+        { "expr": "cluster_gang_jobs_total{status=\"FAILED\"}", "legendFormat": "Failed", "refId": "D" }
+      ]
     }
   ],
   "schemaVersion": 39,
@@ -335,5 +380,5 @@
   "timezone": "browser",
   "title": "GPU Orchestrator — Cluster Overview",
   "uid": "gpu-orch-cluster",
-  "version": 1
+  "version": 2
 }

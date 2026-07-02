@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from control_plane.proto import orchestrator_pb2, orchestrator_pb2_grpc
-from control_plane.database.models import Node, Gpu, Job
+from control_plane.database.models import Node, Gpu, Job, GangJob, GangJobParticipant
 from control_plane.metrics import STALE_NODE_SECONDS
 from control_plane.scheduler import HardwareAwareScheduler
 
@@ -244,13 +244,38 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                 args = json.loads(job.args)
                 env_vars = json.loads(job.env_vars)
 
+                ready_signal, report_port = self._gang_worker_coordination(db, job_id)
+
                 return orchestrator_pb2.JobRequest(
                     job_id=job.job_id,
                     workload_type=job.workload_type,
                     args=args,
                     env_vars=env_vars,
+                    ready_signal=ready_signal,
+                    report_port=report_port,
                 )
         return orchestrator_pb2.JobRequest(job_id="")
+
+    def _gang_worker_coordination(self, db, job_id: str) -> tuple[str, int]:
+        """(ready_signal, report_port) for a gang worker job, else ("", 0)."""
+        participant = (
+            db.query(GangJobParticipant)
+            .filter(
+                GangJobParticipant.job_id == job_id,
+                GangJobParticipant.role == "worker",
+            )
+            .first()
+        )
+        if not participant:
+            return "", 0
+        gang = (
+            db.query(GangJob)
+            .filter(GangJob.gang_job_id == participant.gang_job_id)
+            .first()
+        )
+        if not gang:
+            return "", 0
+        return gang.worker_ready_signal, gang.worker_port
 
     async def UpdateJobStatus(self, request, context):
         with self.db_session_factory() as db:
@@ -259,5 +284,15 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
                 job.status = request.status
                 if request.error_message:
                     job.error_message = request.error_message
-                db.commit()
+
+            if request.endpoint:
+                participant = (
+                    db.query(GangJobParticipant)
+                    .filter(GangJobParticipant.job_id == request.job_id)
+                    .first()
+                )
+                if participant:
+                    participant.endpoint = request.endpoint
+
+            db.commit()
         return orchestrator_pb2.JobStatusResponse(acknowledged=True)

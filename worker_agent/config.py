@@ -13,6 +13,7 @@ class WorkerSettings(BaseSettings):
     supported_workloads: list[str] = ["python", "ffmpeg"]
     metrics_port: int = 9101
     metrics_enabled: bool = True
+    gang_advertise_host: str = ""
 
     @field_validator("orchestrator_url")
     @classmethod

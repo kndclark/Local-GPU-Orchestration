@@ -132,13 +132,15 @@ class WorkerClient:
                     "workload_type": resp.workload_type,
                     "args": list(resp.args),
                     "env_vars": dict(resp.env_vars),
+                    "ready_signal": resp.ready_signal,
+                    "report_port": resp.report_port,
                 }
         except grpc.aio.AioRpcError as e:
             logger.error(f"Failed to request job: {e.code()} - {e.details()}")
         return None
 
     async def update_job_status(
-        self, job_id: str, status: str, error_message: str = ""
+        self, job_id: str, status: str, error_message: str = "", endpoint: str = ""
     ) -> bool:
         if not self.stub:
             self.connect()
@@ -147,6 +149,7 @@ class WorkerClient:
             node_id=self.node_id,
             status=status,
             error_message=error_message,
+            endpoint=endpoint,
         )
         try:
             resp = await self.stub.UpdateJobStatus(req)

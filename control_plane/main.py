@@ -9,8 +9,16 @@ from sqlalchemy.orm import sessionmaker, Session
 
 from prometheus_client import CollectorRegistry, make_asgi_app
 
-from control_plane.database.models import Base, Job, Node, Gpu
+from control_plane.database.models import (
+    Base,
+    Job,
+    Node,
+    Gpu,
+    GangJob,
+    GangJobParticipant,
+)
 from control_plane.scheduler import HardwareAwareScheduler
+from control_plane.gang_scheduler import GangScheduler, run_gang_dispatch_cycle
 from control_plane.metrics import ControlPlaneMetrics, STALE_NODE_SECONDS
 from contextlib import asynccontextmanager
 import grpc.aio
@@ -29,6 +37,7 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 scheduler = HardwareAwareScheduler()
+gang_scheduler = GangScheduler()
 _cp_registry = CollectorRegistry()
 cp_metrics = ControlPlaneMetrics(registry=_cp_registry)
 
@@ -70,13 +79,24 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(STALE_NODE_SECONDS // 2)
 
+    async def _gang_dispatch_loop():
+        while True:
+            try:
+                with SessionLocal() as db:
+                    await run_gang_dispatch_cycle(db, scheduler)
+            except Exception:  # nosec B110
+                pass
+            await asyncio.sleep(5)
+
     metrics_task = asyncio.create_task(_metrics_refresh_loop())
     reconcile_task = asyncio.create_task(_targets_reconcile_loop())
+    gang_task = asyncio.create_task(_gang_dispatch_loop())
 
     yield
 
     metrics_task.cancel()
     reconcile_task.cancel()
+    gang_task.cancel()
     await advertiser.async_stop()
     await server.stop(0)
 
@@ -165,6 +185,33 @@ class NodeSummary(BaseModel):
     total_vram_mb: int
 
 
+class GangJobCreate(BaseModel):
+    worker_workload_type: str
+    worker_args: list[str] = []
+    worker_ready_signal: str = ""
+    worker_port: int = 0
+    controller_workload_type: str
+    controller_args: list[str] = []
+    controller_endpoints_flag: str = "--rpc"
+    min_vram_mb: int
+    requires_cuda: bool = False
+    controller_node_id: str | None = None
+
+
+class ParticipantResponse(BaseModel):
+    node_id: str
+    role: str
+    endpoint: str | None = None
+
+
+class GangJobResponse(BaseModel):
+    gang_job_id: str
+    status: str
+    participants: list[ParticipantResponse]
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
 # ──────────────────────────────────────────────
 # Job endpoints
 # ──────────────────────────────────────────────
@@ -213,6 +260,111 @@ async def get_job(job_id: str, db: Session = Depends(get_db)):
         created_at=job.created_at.isoformat() if job.created_at else None,
         updated_at=job.updated_at.isoformat() if job.updated_at else None,
     )
+
+
+# ──────────────────────────────────────────────
+# Gang job endpoints
+# ──────────────────────────────────────────────
+
+
+def _gang_to_response(gang: GangJob) -> GangJobResponse:
+    return GangJobResponse(
+        gang_job_id=gang.gang_job_id,
+        status=gang.status,
+        participants=[
+            ParticipantResponse(node_id=p.node_id, role=p.role, endpoint=p.endpoint)
+            for p in gang.participants
+        ],
+        created_at=gang.created_at.isoformat() if gang.created_at else None,
+        updated_at=gang.updated_at.isoformat() if gang.updated_at else None,
+    )
+
+
+_GANG_OUTCOME_STATUS = {
+    "NO_NODES": 503,
+    "INSUFFICIENT_VRAM": 503,
+    "SINGLE_NODE_SUFFICIENT": 422,
+    "CONTROLLER_NOT_ELIGIBLE": 422,
+}
+
+
+@app.post("/api/v1/gang-jobs", response_model=GangJobResponse, status_code=201)
+async def create_gang_job(req: GangJobCreate, db: Session = Depends(get_db)):
+    result = gang_scheduler.find_gang(
+        min_vram_mb=req.min_vram_mb,
+        requires_cuda=req.requires_cuda,
+        db=db,
+        controller_node_id=req.controller_node_id,
+    )
+
+    if result.outcome != "OK":
+        status_code = _GANG_OUTCOME_STATUS.get(result.outcome, 503)
+        raise HTTPException(status_code=status_code, detail=result.detail)
+
+    gang_job_id = str(uuid.uuid4())
+    gang = GangJob(
+        gang_job_id=gang_job_id,
+        worker_workload_type=req.worker_workload_type,
+        worker_args=json.dumps(req.worker_args),
+        worker_ready_signal=req.worker_ready_signal,
+        worker_port=req.worker_port,
+        controller_workload_type=req.controller_workload_type,
+        controller_args=json.dumps(req.controller_args),
+        controller_endpoints_flag=req.controller_endpoints_flag,
+        min_vram_mb=req.min_vram_mb,
+        requires_cuda=req.requires_cuda,
+        status="FORMING",
+    )
+    db.add(gang)
+
+    worker_args_json = json.dumps(req.worker_args)
+    worker_job_ids = []
+    for wnode in result.worker_nodes:
+        worker_job_id = str(uuid.uuid4())
+        db.add(
+            Job(
+                job_id=worker_job_id,
+                workload_type=req.worker_workload_type,
+                args=worker_args_json,
+                env_vars="{}",
+                requires_cuda=req.requires_cuda,
+                status="PENDING",
+                assigned_node_id=wnode.node_id,
+            )
+        )
+        db.add(
+            GangJobParticipant(
+                gang_job_id=gang_job_id,
+                node_id=wnode.node_id,
+                role="worker",
+                job_id=worker_job_id,
+            )
+        )
+        worker_job_ids.append(worker_job_id)
+
+    db.add(
+        GangJobParticipant(
+            gang_job_id=gang_job_id,
+            node_id=result.controller_node.node_id,
+            role="controller",
+            job_id=None,
+        )
+    )
+    db.commit()
+    db.refresh(gang)
+
+    for worker_job_id in worker_job_ids:
+        await scheduler.submit_job(worker_job_id)
+
+    return _gang_to_response(gang)
+
+
+@app.get("/api/v1/gang-jobs/{gang_job_id}", response_model=GangJobResponse)
+async def get_gang_job(gang_job_id: str, db: Session = Depends(get_db)):
+    gang = db.query(GangJob).filter(GangJob.gang_job_id == gang_job_id).first()
+    if not gang:
+        raise HTTPException(status_code=404, detail="Gang job not found")
+    return _gang_to_response(gang)
 
 
 # ──────────────────────────────────────────────

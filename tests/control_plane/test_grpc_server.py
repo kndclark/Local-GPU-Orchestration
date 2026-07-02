@@ -10,7 +10,12 @@ from control_plane.grpc_server import (
 )
 from control_plane.metrics import STALE_NODE_SECONDS
 from control_plane.proto import orchestrator_pb2
-from control_plane.database.models import Node, Job
+from control_plane.database.models import (
+    Node,
+    Job,
+    GangJob,
+    GangJobParticipant,
+)
 from control_plane.main import SessionLocal
 
 
@@ -160,6 +165,116 @@ async def test_request_job(clean_db, mock_scheduler):
         job = db.query(Job).filter(Job.job_id == "job-123").first()
         assert job.status == "RUNNING"
         assert job.assigned_node_id == "test-node"
+
+    # A normal (non-gang) job carries no coordination fields.
+    assert resp.ready_signal == ""
+    assert resp.report_port == 0
+
+
+@pytest.mark.asyncio
+async def test_request_job_includes_gang_coordination_fields(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+
+    async def mock_get_job(*args, **kwargs):
+        return "wjob-1"
+
+    mock_scheduler.get_next_job_for_node = mock_get_job
+
+    with clean_db() as db:
+        db.query(GangJobParticipant).delete()
+        db.query(GangJob).delete()
+        db.query(Job).delete()
+        db.add(Node(node_id="wn", hostname="wn"))
+        db.add(
+            GangJob(
+                gang_job_id="g-1",
+                worker_workload_type="llama_rpc_server",
+                controller_workload_type="llama_cli",
+                min_vram_mb=1000,
+                worker_ready_signal="listening",
+                worker_port=50052,
+            )
+        )
+        db.add(Job(job_id="wjob-1", workload_type="llama_rpc_server", status="PENDING"))
+        db.add(
+            GangJobParticipant(
+                gang_job_id="g-1", node_id="wn", role="worker", job_id="wjob-1"
+            )
+        )
+        db.commit()
+
+    req = orchestrator_pb2.JobRequestPlaceholder(node_id="wn")
+    resp = await service.RequestJob(req, MagicMock())
+
+    assert resp.job_id == "wjob-1"
+    assert resp.ready_signal == "listening"
+    assert resp.report_port == 50052
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_basic(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    with clean_db() as db:
+        db.query(Job).delete()
+        db.add(Job(job_id="uj-1", workload_type="ffmpeg", status="RUNNING"))
+        db.commit()
+
+    req = orchestrator_pb2.JobStatusUpdate(
+        job_id="uj-1", node_id="n", status="COMPLETED"
+    )
+    resp = await service.UpdateJobStatus(req, MagicMock())
+    assert resp.acknowledged is True
+
+    with clean_db() as db:
+        job = db.query(Job).filter(Job.job_id == "uj-1").first()
+        assert job.status == "COMPLETED"
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_worker_ready_sets_endpoint(clean_db, mock_scheduler):
+    service = OrchestratorService(clean_db, mock_scheduler)
+    with clean_db() as db:
+        db.query(GangJobParticipant).delete()
+        db.query(GangJob).delete()
+        db.query(Job).delete()
+        db.add(Node(node_id="w-node", hostname="w-host"))
+        db.add(
+            GangJob(
+                gang_job_id="g-1",
+                worker_workload_type="llama_rpc_server",
+                controller_workload_type="llama_cli",
+                min_vram_mb=1000,
+            )
+        )
+        db.add(Job(job_id="wjob-1", workload_type="llama_rpc_server", status="RUNNING"))
+        db.add(
+            GangJobParticipant(
+                gang_job_id="g-1",
+                node_id="w-node",
+                role="worker",
+                job_id="wjob-1",
+            )
+        )
+        db.commit()
+
+    req = orchestrator_pb2.JobStatusUpdate(
+        job_id="wjob-1",
+        node_id="w-node",
+        status="WORKER_READY",
+        endpoint="192.168.1.50:50052",
+    )
+    resp = await service.UpdateJobStatus(req, MagicMock())
+    assert resp.acknowledged is True
+
+    with clean_db() as db:
+        job = db.query(Job).filter(Job.job_id == "wjob-1").first()
+        assert job.status == "WORKER_READY"
+        participant = (
+            db.query(GangJobParticipant)
+            .filter(GangJobParticipant.job_id == "wjob-1")
+            .first()
+        )
+        assert participant.endpoint == "192.168.1.50:50052"
 
 
 @pytest.mark.asyncio

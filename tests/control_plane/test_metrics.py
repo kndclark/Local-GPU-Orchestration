@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from control_plane.database.models import Base, Node, Gpu, Job
+from control_plane.database.models import Base, Node, Gpu, Job, GangJob
 from control_plane.metrics import ControlPlaneMetrics
 
 
@@ -231,3 +231,50 @@ class TestRefreshClusterMetrics:
         assert registry.get_sample_value("cluster_gpus_total") == 0
         assert registry.get_sample_value("cluster_vram_total_mb") == 0
         assert registry.get_sample_value("cluster_vram_free_mb") == 0
+
+
+# ──────────────────────────────────────────────
+# Gang job metrics (Phase 5)
+# ──────────────────────────────────────────────
+
+
+def _gang(gang_job_id, status):
+    return GangJob(
+        gang_job_id=gang_job_id,
+        worker_workload_type="w",
+        controller_workload_type="c",
+        min_vram_mb=1000,
+        status=status,
+    )
+
+
+class TestGangMetrics:
+    def test_gang_gauge_registered(self, metrics, registry):
+        families = {m.name for m in registry.collect()}
+        assert "cluster_gang_jobs_total" in families
+
+    def test_gang_job_status_breakdown(self, metrics, registry, db_session):
+        db_session.add(_gang("g1", "FORMING"))
+        db_session.add(_gang("g2", "RUNNING"))
+        db_session.add(_gang("g3", "RUNNING"))
+        db_session.add(_gang("g4", "COMPLETED"))
+        db_session.commit()
+
+        metrics.refresh(db_session)
+
+        def val(status):
+            return registry.get_sample_value(
+                "cluster_gang_jobs_total", {"status": status}
+            )
+
+        assert val("FORMING") == 1
+        assert val("RUNNING") == 2
+        assert val("COMPLETED") == 1
+        assert val("FAILED") == 0
+
+    def test_gang_metrics_empty_database(self, metrics, registry, db_session):
+        metrics.refresh(db_session)
+        assert (
+            registry.get_sample_value("cluster_gang_jobs_total", {"status": "FORMING"})
+            == 0
+        )
