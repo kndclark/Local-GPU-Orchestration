@@ -62,6 +62,32 @@ async def test_update_prometheus_targets(clean_db, mock_scheduler, targets_file)
     assert data[0]["labels"]["machine"] == "WorkerOne-Updated"
 
 
+@pytest.mark.asyncio
+async def test_update_prometheus_targets_uses_targets_subdir(
+    clean_db, mock_scheduler, tmp_path, monkeypatch
+):
+    """Targets live in a targets/ subdirectory, created if absent.
+
+    Prometheus bind-mounts the targets *directory*, not a single file — a
+    single-file bind mount makes Docker create targets.json as a root-owned
+    directory on a fresh host. Writing into monitoring/targets/ keeps the
+    mount a real directory that Docker (and the control plane) handle cleanly.
+    """
+    import control_plane.grpc_server as gs
+
+    # Honor the real relative path (rooted under tmp_path) so the nested
+    # location can be asserted; overrides conftest's path-flattening fixture.
+    monkeypatch.setattr(gs, "Path", lambda p: tmp_path / p)
+
+    service = OrchestratorService(clean_db, mock_scheduler)
+    service._update_prometheus_targets("192.168.1.100", "WorkerOne")
+
+    expected = tmp_path / "monitoring" / "targets" / "workers.json"
+    assert expected.exists(), "targets must be written under monitoring/targets/"
+    data = json.loads(expected.read_text())
+    assert data[0]["labels"]["machine"] == "WorkerOne"
+
+
 @pytest.mark.parametrize(
     "metrics_ip, metrics_port, colocated, expected_target",
     [

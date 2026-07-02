@@ -29,7 +29,7 @@ def compute_active_machines(db, now: datetime | None = None) -> set[str]:
 
 
 def reconcile_prometheus_targets(
-    active_machines, targets_path: str = "monitoring/targets.json"
+    active_machines, targets_path: str = "monitoring/targets/workers.json"
 ) -> int:
     """Remove Prometheus scrape targets for workers that are no longer active.
 
@@ -148,7 +148,7 @@ class OrchestratorService(orchestrator_pb2_grpc.OrchestratorServicer):
         )
 
     def _update_prometheus_targets(self, ip: str, hostname: str, port: int = 9101):
-        targets_file = Path("monitoring/targets.json")
+        targets_file = Path("monitoring/targets/workers.json")
         if not targets_file.exists():
             targets_file.parent.mkdir(parents=True, exist_ok=True)
             workers = []
